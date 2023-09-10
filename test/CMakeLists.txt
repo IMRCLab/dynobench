@@ -29,7 +29,12 @@ add_executable(test_dynobench test_hello_world.cpp test_base.cpp
                               test_models.cpp
                               test_quadrotor_payload.cpp)
 
+add_executable(test_payload test_payload_rigid.cpp)
+
 add_executable(test_check_trajectory test_check_trajectory.cpp)
+
+target_link_libraries(test_payload dynobench::dynobench
+                      Boost::unit_test_framework)
 
 target_link_libraries(test_dynobench dynobench::dynobench
                       Boost::unit_test_framework)
