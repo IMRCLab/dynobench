@@ -1,0 +1,27 @@
+#use default parameters
+# This is for a triangle shape payload but modeled as a box
+point_mass: false # rigid 
+num_robots: 3
+max_vel: 4
+max_angular_vel: 8
+max_acc: 25
+max_angular_acc: 20
+motor_control: true
+m_payload: 0.0169
+max_f: 1.4
+arm_length: 0.046
+t2t: 0.006 # thrust-to-torque ratio
+m: [0.034, 0.034]
+l_payload: [0.5, 0.5, 0.5]
+J_vx: [16.571710e-6, 16.571710e-6, 16.571710e-6]
+J_vy: [16.655602e-6, 16.655602e-6, 16.655602e-6]
+J_vz: [29.261652e-6, 29.261652e-6, 29.261652e-6]
+J_v : [16.571710e-6, 16.655602e-6, 29.261652e-6] # inertia matrix
+J_p : [7.53799416e-06, 7.54105751e-06, 1.47984432e-05]
+attPx: [0.04, -0.04, -0.04]  # 0.04, 0, 0.005,\\ -0.04, 0.04, 0.005, \\-0.04, -0.04, 0.005
+attPy: [0, 0.04, -0.04]
+attPz: [0.005, 0.005, 0.005]
+size: [0.4, 0.4, 0.4] # not sure what should be added here
+payload_size: [0.08,0.08,0.005] # l,w,h (x,y,z)
+dt: .01
+dynamics: "quad3dpayload_rigid"
