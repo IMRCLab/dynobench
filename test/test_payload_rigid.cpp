@@ -1,28 +1,31 @@
-#include "dynobench/croco_macros.hpp"
-// #include <Eigen/src/plugins/BlockMethods.h>
-#define BOOST_TEST_MODULE test_payload
-#define BOOST_TEST_DYN_LINK
-#include "dynobench/motions.hpp"
-#include "dynobench/quadrotor_payload.hpp"
-#include "dynobench/quadrotor_payload_n.hpp"
-#include <boost/test/unit_test.hpp>
-
-#define base_path "../../"
-
-using namespace dynobench;
-
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include <Eigen/Dense>
+
+#include "dynobench/croco_macros.hpp"
+#include "dynobench/math_utils.hpp"
+// #include <Eigen/src/plugins/BlockMethods.h>
+#define BOOST_TEST_MODULE test_payload
+#define BOOST_TEST_DYN_LINK
+// #include "dynobench/motions.hpp"
+// #include "dynobench/quadrotor_payload.hpp"
+// #include "dynobench/quadrotor_payload_n.hpp"
+#include <boost/test/unit_test.hpp>
+
+#define base_path "../../"
+
+using namespace dynobench;
+
 using UAVParams = std::map<std::string, double>;
 Eigen::IOFormat OctaveFmt(Eigen::StreamPrecision, 0, ", ", ";\n", "", "", "[",
                           "]");
 
-Eigen::Vector4d integrate_quat(const Eigen::Vector4d &__quat_p,
-                               const Eigen::Vector3d &wp, double dt) {
+Eigen::Vector4d intergrate_quat_formatC(const Eigen::Vector4d &__quat_p,
+                                        const Eigen::Vector3d &wp, double dt) {
 
   Eigen::Vector4d quat_p(__quat_p(1), __quat_p(2), __quat_p(3), __quat_p(0));
   quat_p.normalize();
@@ -34,7 +37,8 @@ Eigen::Vector4d integrate_quat(const Eigen::Vector4d &__quat_p,
   return out;
 }
 
-Eigen::Vector3d rotate(const Eigen::Vector4d &quat, const Eigen::Vector3d &v) {
+Eigen::Vector3d rotate_format_C(const Eigen::Vector4d &quat,
+                                const Eigen::Vector3d &v) {
 
   Eigen::Vector4d q = quat.normalized();
   Eigen::Matrix3d R =
@@ -44,7 +48,7 @@ Eigen::Vector3d rotate(const Eigen::Vector4d &quat, const Eigen::Vector3d &v) {
 
 // Assuming you have a function to_matrix implemented elsewhere, it would look
 // something like:
-Eigen::Matrix3d to_matrix(const Eigen::Vector4d &vec) {
+Eigen::Matrix3d to_matrix_formatC(const Eigen::Vector4d &vec) {
   // TODO: check the order of the quaternion!!
   return Eigen::Quaterniond(vec(0), vec(1), vec(2), vec(3)).toRotationMatrix();
 }
@@ -85,28 +89,6 @@ double M = 0.0356;
 Eigen::Vector3d II(16.571710e-6, 16.655602e-6, 29.261652e-6);
 Eigen::Vector3d IIinv = II.cwiseInverse();
 
-// struct UavModel {
-//
-//   Eigen::VectorXd state;
-//
-//   Eigen::Matrix3d I = II.asDiagonal();
-//   Eigen::Matrix3d invI = I.inverse();
-//   double dt = 0.001;
-//
-//   std::pair<Eigen::Vector4d, Eigen::Vector3d>
-//   getNextAngularState(const Eigen::Vector3d &curr_w,
-//                       const Eigen::Vector4d &curr_q,
-//                       const Eigen::Vector3d &tau) {
-//
-//     Eigen::Matrix3d skew_matrix = skew(curr_w);
-//     Eigen::Vector3d wdot = invI * (tau - skew_matrix * I * curr_w);
-//     Eigen::Vector3d wNext = wdot * dt + curr_w;
-//     Eigen::Vector4d qNext = integrate_quat(curr_q, curr_w, dt);
-//
-//     return {qNext, wNext};
-//   }
-// };
-
 struct UAV {
 
   Eigen::Matrix3d I = II.asDiagonal();
@@ -133,7 +115,7 @@ struct UAV {
     Eigen::Matrix3d skew_matrix = skew(curr_w);
     Eigen::Vector3d wdot = invI * (tau - skew_matrix * I * curr_w);
     next_w = wdot * dt + curr_w;
-    next_q = integrate_quat(curr_q, curr_w, dt);
+    next_q = intergrate_quat_formatC(curr_q, curr_w, dt);
   }
 };
 
@@ -233,7 +215,7 @@ public:
       Bq.block<3, 3>(i, i) = m * l * Eigen::Matrix3d::Identity();
 
       if (!pointmass) {
-        Eigen::Matrix3d R_p = to_matrix(
+        Eigen::Matrix3d R_p = to_matrix_formatC(
             state.segment(6, 4)); // Assuming to_matrix() is defined elsewhere
         Eigen::Vector3d posFrload(uavs.at(ii).pos_fr_payload);
         std::cout << "posFrload.format(OctaveFmt)" << std::endl;
@@ -272,7 +254,7 @@ public:
     Eigen::Vector3d wl;
 
     if (!pointmass) {
-      R_p = to_matrix(
+      R_p = to_matrix_formatC(
           state.segment(6, 4)); // Assuming to_matrix() is defined elsewhere
       wl = state.segment(10, 3);
     }
@@ -334,8 +316,8 @@ public:
       // std::endl;
 
       Eigen::Vector3d u_i =
-          rotate(get_state_uav_i_const(ii, state).segment<4>(0),
-                 Eigen::Vector3d(0, 0, f));
+          rotate_format_C(get_state_uav_i_const(ii, state).segment<4>(0),
+                          Eigen::Vector3d(0, 0, f));
       std::cout << "u_i.format(OctaveFmt)" << std::endl;
       std::cout << u_i.format(OctaveFmt) << std::endl;
 
@@ -343,7 +325,7 @@ public:
       Eigen::Matrix3d R_p;
       Eigen::Vector3d wl;
       if (!pointmass) {
-        R_p = to_matrix(state.segment(6, 4));
+        R_p = to_matrix_formatC(state.segment(6, 4));
         wl = state.segment(10, 3);
         posFrload = uavs.at(ii).pos_fr_payload;
         // posFrload << uav.at("pos_fr_payloadx"), uav.at("pos_fr_payloady"),
@@ -432,7 +414,7 @@ public:
       if (semi_implicit_rotation) {
         wp = next_state.segment(10, 3);
       }
-      next_state.segment(6, 4) = integrate_quat(
+      next_state.segment(6, 4) = intergrate_quat_formatC(
           quat_p, wp,
           dt); // Assuming integrate_quat() is defined elsewhere in the code
     }
@@ -485,17 +467,90 @@ Eigen::VectorXd from_stdvect_to_eigen(const std::vector<double> &vec) {
   return out;
 }
 
+// fro
+
+void state_dynobench2coltrans(Eigen::Ref<Eigen::VectorXd> out,
+                              const Eigen::Ref<const Eigen::VectorXd> in,
+                              int num_uavs) {
+
+  out = in;
+
+  // flip quaternion of payload
+  int base = 6;
+  out(base) = in(base + 3);
+  out(base + 1) = in(base);
+  out(base + 2) = in(base + 1);
+  out(base + 3) = in(base + 2);
+
+  // from [ q, w, q, w, ...] to [ (q,q,...) , (w,...) ]
+  for (size_t i = 0; i < num_uavs; i++) {
+    out.segment(13 + i * 3, 3) = in.segment(13 + i * 6, 3);
+    out.segment(13 + 3 * num_uavs + i * 3, 3) = in.segment(13 + i * 6 + 3, 3);
+  }
+
+  for (size_t i = 0; i < num_uavs; i++) {
+    // flip the quaternion
+    int base = 13 + num_uavs * 6 + 7 * i;
+    out(base) = in(base + 3);
+    out(base + 1) = in(base);
+    out(base + 2) = in(base + 1);
+    out(base + 3) = in(base + 2);
+  }
+}
+
+void state_coltrans2dynobench(Eigen::Ref<Eigen::VectorXd> out,
+                              const Eigen::Ref<const Eigen::VectorXd> in,
+                              int num_uavs) {
+
+  out = in;
+  // flip quaternion of payload
+  int base = 6;
+  out(base) = in(base + 1);
+  out(base + 1) = in(base + 2);
+  out(base + 2) = in(base + 3);
+  out(base + 3) = in(base);
+
+  // from [ (q,q,...) , (w,...) ] to [ q, w, q, w, ...]
+  for (size_t i = 0; i < num_uavs; i++) {
+    out.segment(13 + i * 6, 3) = in.segment(13 + i * 3, 3);
+    out.segment(13 + i * 6 + 3, 3) = in.segment(13 + 3 * num_uavs + i * 3, 3);
+  }
+
+  for (size_t i = 0; i < num_uavs; i++) {
+    // flip the quaternion
+    int base = 13 + num_uavs * 6 + 7 * i;
+    out(base) = in(base + 1);
+    out(base + 1) = in(base + 2);
+    out(base + 2) = in(base + 3);
+    out(base + 3) = in(base);
+  }
+}
+
+void create_state_from_files(Eigen::Ref<Eigen::VectorXd> out,
+                             const Eigen::Ref<const Eigen::VectorXd> payload_in,
+                             std::vector<Eigen::VectorXd> uavs_states) {
+  // const Eigen::Ref<const Eigen::VectorXd> cf1,
+  // const Eigen::Ref<const Eigen::VectorXd> cf2) {
+
+  int num_uavs = uavs_states.size();
+  out.segment(0, 13 + num_uavs * 6) = payload_in.segment(0, 13 + num_uavs * 6);
+  for (size_t i = 0; i < num_uavs; i++) {
+    out.segment(13 + num_uavs * 6 + 7 * i, 7) = uavs_states.at(i).segment(6, 7);
+  }
+}
+
+void state_dynobench2coltrans(Eigen::Ref<Eigen::VectorXd> out,
+                              const Eigen::Ref<const Eigen::VectorXd> in) {}
+
 BOOST_AUTO_TEST_CASE(t_big_mess) {
 
   using Matrix = std::vector<std::vector<double>>;
-#define base_path_csv                                                          \
-  "/home/quim/stg/khaled/col-trans/sim/example_2_rig_circle/"
+#define base_path_csv "../../test/example_2_rig_circle/"
 
   Matrix cfs1 = readCSV(base_path_csv "cf1.csv");
   Matrix cfs2 = readCSV(base_path_csv "cf2.csv");
   Matrix actions1 = readCSV(base_path_csv "action_1.csv");
   Matrix actions2 = readCSV(base_path_csv "action_2.csv");
-
   Matrix payload_state = readCSV(base_path_csv "payload.csv");
 
   int time_step = 300;
@@ -543,20 +598,36 @@ BOOST_AUTO_TEST_CASE(t_big_mess) {
   Eigen::VectorXd state(payload.nx);
   state.setZero();
 
-  state.segment(0, 13 + 2 * 6) =
-      from_stdvect_to_eigen(payload_state.at(time_step));
+  // state.segment(0, 13 + 2 * 6) =
+  //     from_stdvect_to_eigen(payload_state.at(time_step));
+  //
+  // payload.get_state_uav_i(0, state).segment(0, 7) =
+  //     uav_states.at(0).segment(6, 7);
+  //
+  // payload.get_state_uav_i(1, state).segment(0, 7) =
+  //     uav_states.at(1).segment(6, 7);
 
-  payload.get_state_uav_i(0, state).segment(0, 7) =
-      uav_states.at(0).segment(6, 7);
+  create_state_from_files(
+      state, from_stdvect_to_eigen(payload_state.at(time_step)), uav_states);
 
-  payload.get_state_uav_i(1, state).segment(0, 7) =
-      uav_states.at(1).segment(6, 7);
+  // sanity check
+  {
+    Eigen::VectorXd state_dyno(payload.nx);
+    Eigen::VectorXd state_col_v2(payload.nx);
+    state_coltrans2dynobench(state_dyno, state, payload.numOfquads);
+    state_dynobench2coltrans(state_col_v2, state_dyno, payload.numOfquads);
+    CHECK_LEQ((state - state_col_v2).norm(), 1e-12, "");
+  }
 
   payload.stateEvolution(next_state, state, ctrlInputs);
 
   // payload.stateEvolution(ctrlInputs, uavs, uavs_params);
   Eigen::VectorXd payload_state_next =
       from_stdvect_to_eigen(payload_state.at(time_step + 1));
+
+  CHECK_LEQ((next_state.head(payload.payload_w_cables_nx) - payload_state_next)
+                .norm(),
+            1e-12, AT);
 
   std::cout << "difference against next state Payload w cables -- this should "
                "be zero!!"
@@ -613,6 +684,15 @@ BOOST_AUTO_TEST_CASE(t_big_mess) {
   std::cout << "lets compare uav 1" << std::endl;
   Eigen::VectorXd next1 = from_stdvect_to_eigen(cfs1.at(time_step + 1));
   Eigen::VectorXd next2 = from_stdvect_to_eigen(cfs2.at(time_step + 1));
+
+  CHECK_LEQ((next1.segment(6, 7) -
+             payload.get_state_uav_i(0, next_state).segment(0, 7))
+                .norm(),
+            1e-12, "");
+  CHECK_LEQ((next2.segment(6, 7) -
+             payload.get_state_uav_i(1, next_state).segment(0, 7))
+                .norm(),
+            1e-12, "");
 
   std::cout << "uav 1 " << std::endl;
   std::cout << "quat "
