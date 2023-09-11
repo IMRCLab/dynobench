@@ -70,7 +70,7 @@ std::unique_ptr<Model_robot> robot_factory(const char *file,
     return std::make_unique<Integrator2_2d>(file, p_lb, p_ub);
   } else if (dynamics == "quad3dpayload") {
     return std::make_unique<Model_quad3dpayload>(file, p_lb, p_ub);
-  } else if (dynamics == "quad3dpayload_point") {
+  } else if (dynamics == "quad3dpayload_point" || dynamics == "quad3dpayload_rigid") {
     return std::make_unique<Model_quad3dpayload_n>(file, p_lb, p_ub);
   }
   else if (dynamics == "quad3dpayload_n") {

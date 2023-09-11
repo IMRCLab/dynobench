@@ -24,4 +24,4 @@ attPz: [0.005, 0.005, 0.005]
 size: [0.4, 0.4, 0.4] # not sure what should be added here
 payload_size: [0.08,0.08,0.005] # l,w,h (x,y,z)
 dt: .01
-dynamics: "quad3dpayload_point"
+dynamics: "quad3dpayload_rigid"
