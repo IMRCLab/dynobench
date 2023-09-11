@@ -85,16 +85,13 @@ std::vector<std::vector<double>> readCSV(const std::string &filename) {
   return data;
 }
 
-double M = 0.0356;
-Eigen::Vector3d II(16.571710e-6, 16.655602e-6, 29.261652e-6);
-Eigen::Vector3d IIinv = II.cwiseInverse();
-
 struct UAV {
 
-  Eigen::Matrix3d I = II.asDiagonal();
+  Eigen::Matrix3d I =
+      Eigen::Vector3d(16.571710e-6, 16.655602e-6, 29.261652e-6).asDiagonal();
   Eigen::Matrix3d invI = I.inverse();
   // Eigen::VectorXd states;
-  double m = M;
+  double m = 0.0356;
   double l_c = .5;
   Eigen::Vector3d pos_fr_payload = Eigen::Vector3d(0., 0, 0.);
 
@@ -124,7 +121,7 @@ public:
   PayloadSystem(const std::vector<UAV> &uavs) : uavs(uavs) {
     numOfquads = uavs.size();
     nx = 13 + numOfquads * 6 + numOfquads * 7;
-    mt = numOfquads * M + 0.0115; // TODO: this is not general
+    mt = numOfquads * 0.0356 + 0.0115; // TODO: this is not general
     payload_nx = 13;
     dt = 0.001;
     payload_nv = 6;
