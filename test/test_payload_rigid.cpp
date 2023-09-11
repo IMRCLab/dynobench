@@ -1,3 +1,5 @@
+#include "dynobench/croco_macros.hpp"
+// #include <Eigen/src/plugins/BlockMethods.h>
 #define BOOST_TEST_MODULE test_payload
 #define BOOST_TEST_DYN_LINK
 #include "dynobench/motions.hpp"
@@ -81,57 +83,147 @@ std::vector<std::vector<double>> readCSV(const std::string &filename) {
 
 double M = 0.0356;
 Eigen::Vector3d II(16.571710e-6, 16.655602e-6, 29.261652e-6);
+Eigen::Vector3d IIinv = II.cwiseInverse();
 
-struct UavModel {
+// struct UavModel {
+//
+//   Eigen::VectorXd state;
+//
+//   Eigen::Matrix3d I = II.asDiagonal();
+//   Eigen::Matrix3d invI = I.inverse();
+//   double dt = 0.001;
+//
+//   std::pair<Eigen::Vector4d, Eigen::Vector3d>
+//   getNextAngularState(const Eigen::Vector3d &curr_w,
+//                       const Eigen::Vector4d &curr_q,
+//                       const Eigen::Vector3d &tau) {
+//
+//     Eigen::Matrix3d skew_matrix = skew(curr_w);
+//     Eigen::Vector3d wdot = invI * (tau - skew_matrix * I * curr_w);
+//     Eigen::Vector3d wNext = wdot * dt + curr_w;
+//     Eigen::Vector4d qNext = integrate_quat(curr_q, curr_w, dt);
+//
+//     return {qNext, wNext};
+//   }
+// };
 
-  Eigen::VectorXd state;
+struct UAV {
 
   Eigen::Matrix3d I = II.asDiagonal();
   Eigen::Matrix3d invI = I.inverse();
-  double dt = 0.001;
+  // Eigen::VectorXd states;
+  double m = M;
+  double l_c = .5;
+  Eigen::Vector3d pos_fr_payload = Eigen::Vector3d(0., 0, 0.);
 
-  std::pair<Eigen::Vector4d, Eigen::Vector3d>
-  getNextAngularState(const Eigen::Vector3d &curr_w,
-                      const Eigen::Vector4d &curr_q,
-                      const Eigen::Vector3d &tau) {
+  void check() {
+    // CHECK_EQ(states.size(), 7, "");
+    CHECK((I.sum() > 0), "");
+    CHECK((invI.sum() > 0), "");
+    CHECK((pos_fr_payload.sum() > 0), "");
+    CHECK((pos_fr_payload.sum() > 1e-6), "");
+  }
+
+  void getNextAngularState(Eigen::Ref<Eigen::Vector4d> next_q,
+                           Eigen::Ref<Eigen::Vector3d> next_w,
+                           const Eigen::Vector3d &curr_w,
+                           const Eigen::Vector4d &curr_q,
+                           const Eigen::Vector3d &tau, double dt) {
 
     Eigen::Matrix3d skew_matrix = skew(curr_w);
     Eigen::Vector3d wdot = invI * (tau - skew_matrix * I * curr_w);
-    Eigen::Vector3d wNext = wdot * dt + curr_w;
-    Eigen::Vector4d qNext = integrate_quat(curr_q, curr_w, dt);
-
-    return {qNext, wNext};
+    next_w = wdot * dt + curr_w;
+    next_q = integrate_quat(curr_q, curr_w, dt);
   }
 };
 
-class Payload {
+class PayloadSystem {
 public:
-  Eigen::VectorXd plstate;
-  int sys_dim;
-  int plSysDim;
-  int plStateSize;
-  bool pointmass;
+  PayloadSystem(const std::vector<UAV> &uavs) : uavs(uavs) {
+    numOfquads = uavs.size();
+    nx = 13 + numOfquads * 6 + numOfquads * 7;
+    mt = numOfquads * M + 0.0115; // TODO: this is not general
+    payload_nx = 13;
+    dt = 0.001;
+    payload_nv = 6;
+    payload_w_cables_nv = payload_nv + 3 * numOfquads;
+    payload_w_cables_nx = payload_nx + 6 * numOfquads;
+    accl.resize(payload_w_cables_nv);
+    accl.setZero();
+    J = Eigen::Vector3d(3.0002e-4, 7.7083e-7, 3.0075e-4).asDiagonal();
+  }
+
+  // Eigen::VectorXd plstate;
+  int payload_w_cables_nv;
+
+  int nx;
+  int payload_nv;
+  int payload_nx;
+  int payload_w_cables_nx;
+  bool pointmass = false;
   double mt; // total mass of system
-  Eigen::VectorXd state;
+  // Eigen::VectorXd state;
   Eigen::Matrix3d J;
   double dt;
   Eigen::VectorXd accl;
   int numOfquads;
 
-  Eigen::MatrixXd getBq(const std::map<std::string, UAVParams> &uavs_params) {
-    // Assuming sys_dim, plSysDim, plStateSize, mt, J, state, and pointmass are
-    // member variables of the class
-    Eigen::MatrixXd Bq(sys_dim, sys_dim);
+  std::vector<UAV> uavs;
+  // std::vector<Eigen::VectorXd> uav_states;
+
+  // Eigen::VectorBlock<Eigen::VectorXd>
+  auto get_state_uav_i(int i, Eigen::Ref<Eigen::VectorXd> state) {
+    CHECK_EQ(state.size(), nx, "");
+    CHECK_GEQ(i, 0, "");
+    CHECK_GEQ(numOfquads, i + 1, "");
+    return state.segment(payload_w_cables_nx + i * 7, 7);
+  }
+
+  auto get_state_uav_i_const(int i,
+                             const Eigen::Ref<const Eigen::VectorXd> &state) {
+    CHECK_EQ(state.size(), nx, "");
+    CHECK_GEQ(i, 0, "");
+    CHECK_GEQ(numOfquads, i + 1, "");
+    return state.segment(payload_w_cables_nx + i * 7, 7);
+  }
+
+  // Eigen::VectorBlock<const Eigen::VectorXd> get_state_uav_i(int i, const
+  // Eigen::VectorXd &state) {
+  //   CHECK_EQ(state.size(), payload_w_cables_nv + 7 * numOfquads, "");
+  //   CHECK_GEQ(i, 0, "");
+  //   CHECK_GEQ(numOfquads, i + 1, "");
+  //   return state.segment(payload_w_cables_nv + i * 7, 7);
+  // }
+
+  void check() { CHECK_EQ(uavs.size(), numOfquads, ""); }
+
+  void getBq(Eigen::Ref<Eigen::MatrixXd> Bq,
+             const Eigen::Ref<const Eigen::VectorXd> state) {
+    // Assuming payload_w_cables_nv, payload_nv, payload_nx, mt, J, state, and
+    // pointmass are member variables of the class Eigen::MatrixXd
+    // Bq(payload_w_cables_nv, payload_w_cables_nv);
+
+    CHECK_EQ(state.size(), nx, "");
+    CHECK_EQ(Bq.rows(), payload_w_cables_nv, "");
+    CHECK_EQ(Bq.cols(), payload_w_cables_nv, "");
+
     Bq.setZero();
 
     Bq.block<3, 3>(0, 0) = mt * Eigen::Matrix3d::Identity();
 
-    int i = plSysDim;
-    int k = plStateSize;
+    std::cout << "state.transpose().format(OctaveFmt)" << std::endl;
+    std::cout << state.transpose().format(OctaveFmt) << std::endl;
 
-    for (const auto &[name, uav] : uavs_params) {
-      double m = uav.at("m");
-      double l = uav.at("l_c");
+    int i = payload_nv;
+    int k = payload_nx;
+
+    for (int ii = 0; ii < numOfquads; ii++) {
+
+      std::cout << " i "
+                << " k " << i << " " << k << std::endl;
+
+      double m = uavs.at(ii).m;
+      double l = uavs.at(ii).l_c;
 
       Eigen::Vector3d qi = state.segment(k, 3);
       k += 3;
@@ -143,9 +235,9 @@ public:
       if (!pointmass) {
         Eigen::Matrix3d R_p = to_matrix(
             state.segment(6, 4)); // Assuming to_matrix() is defined elsewhere
-        Eigen::Vector3d posFrload(uav.at("pos_fr_payloadx"),
-                                  uav.at("pos_fr_payloady"),
-                                  uav.at("pos_fr_payloadz"));
+        Eigen::Vector3d posFrload(uavs.at(ii).pos_fr_payload);
+        std::cout << "posFrload.format(OctaveFmt)" << std::endl;
+        std::cout << posFrload.format(OctaveFmt) << std::endl;
 
         Eigen::Matrix3d qiqiT = qi * qi.transpose();
 
@@ -161,20 +253,20 @@ public:
     if (!pointmass) {
       Bq.block<3, 3>(3, 3) = J - Bq.block<3, 3>(3, 3);
     }
-
-    return Bq;
   }
 
-  Eigen::VectorXd getNq(const std::map<std::string, UAVParams> &uavs_params) {
-    // Assuming sys_dim, plSysDim, plStateSize, mt, state are member variables
-    // of the class
-    Eigen::VectorXd Nq(sys_dim);
+  void getNq(Eigen::Ref<Eigen::VectorXd> Nq,
+             const Eigen::Ref<const Eigen::VectorXd> state) {
+    // Assuming payload_w_cables_nv, payload_nv, payload_nx, mt, state are
+    // member variables of the class Eigen::VectorXd Nq(payload_w_cables_nv);
+
+    CHECK_EQ(Nq.size(), payload_w_cables_nv, "");
+    CHECK_EQ(state.size(), nx, "");
+
     Nq.setZero();
 
-    int i = plSysDim;
-    int k = plStateSize;
-
-    Eigen::Matrix3d Mq = mt * Eigen::Matrix3d::Identity();
+    int i = payload_nv;
+    int k = payload_nx;
 
     Eigen::Matrix3d R_p;
     Eigen::Vector3d wl;
@@ -185,9 +277,12 @@ public:
       wl = state.segment(10, 3);
     }
 
-    for (const auto &[name, uav] : uavs_params) {
-      double m = uav.at("m");
-      double l = uav.at("l_c");
+    // for (const auto &[name, uav] : uavs_params) {
+
+    for (size_t ii = 0; ii < numOfquads; ii++) {
+
+      double m = uavs.at(ii).m;
+      double l = uavs.at(ii).l_c;
 
       Eigen::Vector3d qi = state.segment(k, 3);
       Eigen::Vector3d wi = state.segment(k + 3 * numOfquads, 3);
@@ -198,10 +293,7 @@ public:
         Nq.segment(0, 3) +=
             -m * l * wi.dot(wi) * qi; // Using Eigen's dot() for dot product
       } else {
-        Eigen::Vector3d posFrload = Eigen::Vector3d(
-            uav.at("pos_fr_payloadx"), uav.at("pos_fr_payloady"),
-            uav.at("pos_fr_payloadz")); // Assuming pos_fr_payload is
-                                        // std::vector<double>
+        Eigen::Vector3d posFrload = uavs.at(ii).pos_fr_payload;
         Eigen::Matrix3d qiqiT = qi * qi.transpose();
 
         Nq.segment(0, 3) += (-m * l * wi.dot(wi) * qi -
@@ -219,31 +311,31 @@ public:
       // Assuming J is a member variable representing inertia tensor
       Nq.segment(3, 3) -= skew(wl) * J * wl;
     }
-
-    return Nq;
   }
 
-  Eigen::VectorXd getuinp(const std::map<std::string, UAVParams> &uavs_params,
-                          const Eigen::MatrixXd &ctrlInputs,
-                          const std::map<std::string, UavModel> &uavs) {
+  void getuinp(Eigen::Ref<Eigen::VectorXd> u_inp,
+               const Eigen::MatrixXd &ctrlInputs,
+               const Eigen::Ref<const Eigen::VectorXd> state) {
 
-    Eigen::VectorXd u_inp = Eigen::VectorXd::Zero(sys_dim);
-    int i = 0, j = plSysDim, k = plStateSize;
+    CHECK_EQ(u_inp.size(), payload_w_cables_nv, "");
 
-    for (const auto &paramPair : uavs_params) {
-      const std::string &name = paramPair.first;
-      const UAVParams &uav = paramPair.second;
+    int i = 0, j = payload_nv, k = payload_nx;
 
-      double m = uav.at("m");
-      double l = uav.at("l_c");
-      double f = ctrlInputs(i, 0);
+    for (size_t ii = 0; ii < numOfquads; ++ii) {
+
+      // const std::string &name = paramPair.first;
+      // const UAVParams &uav = paramPair.second;
+
+      double f = ctrlInputs(ii, 0);
 
       // std::cout << "uavs.at(name).state.segment(6,
       // 4).transpose().format(OctaveFmt)" << std::endl; std::cout <<
       // uavs.at(name).state.segment(6, 4).transpose().format(OctaveFmt) <<
       // std::endl;
+
       Eigen::Vector3d u_i =
-          rotate(uavs.at(name).state.segment(6, 4), Eigen::Vector3d(0, 0, f));
+          rotate(get_state_uav_i_const(ii, state).segment<4>(0),
+                 Eigen::Vector3d(0, 0, f));
       std::cout << "u_i.format(OctaveFmt)" << std::endl;
       std::cout << u_i.format(OctaveFmt) << std::endl;
 
@@ -253,19 +345,19 @@ public:
       if (!pointmass) {
         R_p = to_matrix(state.segment(6, 4));
         wl = state.segment(10, 3);
-        posFrload << uav.at("pos_fr_payloadx"), uav.at("pos_fr_payloady"),
-            uav.at("pos_fr_payloadz");
+        posFrload = uavs.at(ii).pos_fr_payload;
+        // posFrload << uav.at("pos_fr_payloadx"), uav.at("pos_fr_payloady"),
+        //     uav.at("pos_fr_payloadz");
       }
 
       Eigen::Vector3d qi = state.segment(k, 3);
-      Eigen::Vector3d wi = state.segment(k + 3 * numOfquads, 3);
       k += 3;
 
       Eigen::Matrix3d qiqiT = qi * qi.transpose();
 
       u_inp.segment(0, 3) += u_i;
 
-      Eigen::Vector3d u_perp = (Eigen::Matrix3d::Identity() - qiqiT) * u_i;
+      // Eigen::Vector3d u_perp = (Eigen::Matrix3d::Identity() - qiqiT) * u_i;
       u_inp.segment(j, 3) = -skew(qi) * u_i;
 
       if (!pointmass) {
@@ -275,105 +367,112 @@ public:
       i++;
       j += 3;
     }
-
-    return u_inp;
   }
 
   // std::pair<std::map<std::string, UavModel>, Eigen::VectorXd>
-  void stateEvolution(const Eigen::MatrixXd &ctrlInputs,
-                      std::map<std::string, UavModel> &uavs,
-                      const std::map<std::string, UAVParams> &uavs_params) {
+  void stateEvolution(Eigen::Ref<Eigen::VectorXd> next_state,
+                      const Eigen::Ref<const Eigen::VectorXd> &state,
+                      const Eigen::MatrixXd &ctrlInputs) {
 
-    // Eigen::MatrixXd newCtrlInputs =
-    //     ctrlInputs.block(1, 0, ctrlInputs.rows() - 1, ctrlInputs.cols());
-    Eigen::MatrixXd Bq = getBq(uavs_params);
-    Eigen::MatrixXd Nq = getNq(uavs_params);
+    CHECK_EQ(state.size(), nx, "");
+    CHECK_EQ(next_state.size(), nx, "");
+
+    Eigen::MatrixXd Bq(payload_w_cables_nv, payload_w_cables_nv);
+    Eigen::VectorXd Nq(payload_w_cables_nv);
+    Eigen::VectorXd u_inp(payload_w_cables_nv);
+
+    Bq.setZero();
+    Nq.setZero();
+    u_inp.setZero();
+    getBq(Bq, state);
+    getNq(Nq, state);
+    getuinp(u_inp, ctrlInputs, state);
 
     std::cout << "ctrlInputs.format(OctaveFmt)" << std::endl;
     std::cout << ctrlInputs.format(OctaveFmt) << std::endl;
 
-    Eigen::VectorXd u_inp = getuinp(uavs_params, ctrlInputs, uavs);
-
     std::cout << "u_inp.format(OctaveFmt)" << std::endl;
     std::cout << u_inp.transpose().format(OctaveFmt) << std::endl;
 
-    int k = plStateSize;
-    int j = plSysDim;
-    plstate.segment(0, 3) = state.segment(0, 3);
-    plstate.segment(3, 3) = state.segment(3, 3);
-    plstate.segment(6, 4) = state.segment(6, 4);
+    std::cout << "Bq " << std::endl;
+    std::cout << Bq.format(OctaveFmt) << std::endl;
+    std::cout << "Nq " << std::endl;
+    std::cout << Nq.format(OctaveFmt) << std::endl;
 
-    for (int i = 0; i < numOfquads; ++i) {
-      plstate.segment(k, 3) = state.segment(k, 3);
-      plstate.segment(k + 3 * numOfquads, 3) =
-          state.segment(k + 3 * numOfquads, 3);
-      k += 3;
-      j += 3;
-    }
+    // int k = payload_nx;
+    // int j = payload_nv;
+    // plstate.segment(0, 3) = state.segment(0, 3);
+    // plstate.segment(3, 3) = state.segment(3, 3);
+    // plstate.segment(6, 4) = state.segment(6, 4);
+    //
+    // for (int i = 0; i < numOfquads; ++i) {
+    //   plstate.segment(k, 3) = state.segment(k, 3);
+    //   plstate.segment(k + 3 * numOfquads, 3) =
+    //       state.segment(k + 3 * numOfquads, 3);
+    //   k += 3;
+    //   // j += 3;
+    // }
 
-    try {
-      accl = Bq.inverse() * (Nq + u_inp);
-      accl.segment(0, 3) -= Eigen::Vector3d(0, 0, 9.81);
-    } catch (std::exception &err) {
-      std::cerr << "Unexpected error: " << err.what() << std::endl;
-      ERROR_WITH_INFO("");
-    }
-    getNextState();
+    accl = Bq.inverse() * (Nq + u_inp);
+    accl.segment(0, 3) -= Eigen::Vector3d(0, 0, 9.81);
 
-    int m = 0;
-    for (auto &[id, uav] : uavs) {
-      Eigen::VectorXd tau = ctrlInputs.row(m).segment(1, 3);
-      Eigen::Vector4d curr_q = uav.state.segment(6, 4);
-      Eigen::Vector3d curr_w = uav.state.segment(10, 3);
+    // getNextState();
 
-      Eigen::Vector4d qNext;
-      Eigen::Vector3d wNext;
-      std::tie(qNext, wNext) = uav.getNextAngularState(curr_w, curr_q, tau);
-
-      uav.state.segment(6, 4) = qNext;
-      uav.state.segment(10, 3) = wNext;
-      m++;
-    }
-
-    // return {uavs, state};
-  }
-
-  void getNextState() {
-    // Assuming state, accl, dt, sys_dim, plStateSize, plSysDim, numOfquads
-    // are member variables of the class
-
+    bool semi_implicit_rotation = true;
     Eigen::Vector3d xp = state.segment(0, 3);
     Eigen::Vector3d vp = state.segment(3, 3);
 
     if (!pointmass) {
       Eigen::Vector4d quat_p = state.segment(6, 4);
       Eigen::Vector3d wp = state.segment(10, 3);
-
+      // [ 0.9998121  -0.007676   -0.01779678  0.00032969]
+      std::cout << "accl format(OctaveFmt)" << std::endl;
       std::cout << accl.format(OctaveFmt) << std::endl;
-      state.segment(10, 3) = accl.segment(3, 3) * dt + wp;
-      state.segment(6, 4) = integrate_quat(
+      next_state.segment(10, 3) = accl.segment(3, 3) * dt + wp;
+      if (semi_implicit_rotation) {
+        wp = next_state.segment(10, 3);
+      }
+      next_state.segment(6, 4) = integrate_quat(
           quat_p, wp,
           dt); // Assuming integrate_quat() is defined elsewhere in the code
     }
 
-    state.segment(0, 3) = vp * dt + xp;
-    state.segment(3, 3) = accl.segment(0, 3) * dt + vp;
+    next_state.segment(0, 3) = vp * dt + xp;
+    next_state.segment(3, 3) = accl.segment(0, 3) * dt + vp;
 
-    int k = plStateSize;
-    int j = plSysDim;
+    int k = payload_nx;
+    int j = payload_nv;
 
-    for (int i = 0; i < numOfquads; ++i) {
+    for (int ii = 0; ii < numOfquads; ++ii) {
       Eigen::Vector3d qi = state.segment(k, 3);
       Eigen::Vector3d wi = state.segment(k + 3 * numOfquads, 3);
       Eigen::Vector3d wdi = accl.segment(j, 3);
 
-      state.segment(k + 3 * numOfquads, 3) = wdi * dt + wi;
+      next_state.segment(k + 3 * numOfquads, 3) = wdi * dt + wi;
+
+      if (semi_implicit_rotation) {
+        wi = next_state.segment(k + 3 * numOfquads, 3);
+      }
+
       Eigen::Vector3d qdot =
           wi.cross(qi); // qdot using Eigen's cross product method
-      state.segment(k, 3) = qdot * dt + qi;
+      next_state.segment(k, 3) = qdot * dt + qi;
 
       k += 3;
       j += 3;
+    }
+
+    for (int ii = 0; ii < numOfquads; ++ii) {
+      Eigen::VectorXd tau = ctrlInputs.row(ii).segment(1, 3);
+      Eigen::Vector4d curr_q = get_state_uav_i_const(ii, state).segment(0, 4);
+      Eigen::Vector3d curr_w = get_state_uav_i_const(ii, state).segment(4, 3);
+
+      Eigen::Vector4d qNext;
+      Eigen::Vector3d wNext;
+      uavs.at(ii).getNextAngularState(qNext, wNext, curr_w, curr_q, tau, dt);
+
+      get_state_uav_i(ii, next_state).segment(0, 4) = qNext;
+      get_state_uav_i(ii, next_state).segment(4, 3) = wNext;
     }
   }
 };
@@ -389,7 +488,6 @@ Eigen::VectorXd from_stdvect_to_eigen(const std::vector<double> &vec) {
 BOOST_AUTO_TEST_CASE(t_big_mess) {
 
   using Matrix = std::vector<std::vector<double>>;
-  using Vector = std::vector<double>;
 #define base_path_csv                                                          \
   "/home/quim/stg/khaled/col-trans/sim/example_2_rig_circle/"
 
@@ -404,11 +502,6 @@ BOOST_AUTO_TEST_CASE(t_big_mess) {
   // load the state
   // std::vector<UavModel> uavs(2);
 
-  std::map<std::string, UavModel> uavs;
-
-  uavs.insert({"uav_1", UavModel()});
-  uavs.insert({"uav_2", UavModel()});
-
   std::vector<Eigen::VectorXd> uav_states;
   std::vector<Eigen::VectorXd> uav_controls;
 
@@ -418,30 +511,11 @@ BOOST_AUTO_TEST_CASE(t_big_mess) {
   uav_controls.push_back(from_stdvect_to_eigen(actions1.at(time_step)));
   uav_controls.push_back(from_stdvect_to_eigen(actions2.at(time_step)));
 
-  Payload payload;
-  payload.state = from_stdvect_to_eigen(payload_state.at(time_step));
+  std::vector<UAV> uavs(2);
+  uavs.at(0).pos_fr_payload = Eigen::Vector3d(0, .3, 0);
+  uavs.at(1).pos_fr_payload = Eigen::Vector3d(0, -.3, 0);
 
-  std::map<std::string, std::map<std::string, double>> uavs_params;
-
-  UAVParams uav_params_1{
-      {"m", M},
-      {"l_c", .5},
-      {"pos_fr_payloadx", 0.},
-      {"pos_fr_payloady", 0.3},
-      {"pos_fr_payloadz", 0.},
-  };
-
-  UAVParams uav_params_2{
-      {"m", M},
-      {"l_c", .5},
-      {"pos_fr_payloadx", 0.},
-      {"pos_fr_payloady", -0.3},
-      {"pos_fr_payloadz", 0.},
-
-  };
-
-  uavs_params.insert({"uav_1", uav_params_1});
-  uavs_params.insert({"uav_2", uav_params_2});
+  PayloadSystem payload(uavs);
 
   double d = 0.046;
   double arm = 0.707106781 * d;
@@ -456,114 +530,116 @@ BOOST_AUTO_TEST_CASE(t_big_mess) {
 
   Eigen::MatrixXd ctrlInputs(2, 4);
 
-  payload.state = from_stdvect_to_eigen(payload_state.at(time_step));
-  payload.state.segment(6, 4).normalize();
-  payload.plstate = payload.state; // what the hell is plstate?
-  payload.mt = 2. * M + 0.0115;
-  payload.plStateSize = 13;
-  payload.dt = 0.001;
-
-  payload.plSysDim = 6;
-  payload.sys_dim = payload.plSysDim + 3 * 2;
-  payload.numOfquads = 2;
-  payload.accl = Eigen::VectorXd::Zero(6 + 3 * 2);
-  payload.J = Eigen::Vector3d(3.0002e-4, 7.7083e-7, 3.0075e-4).asDiagonal();
-
-  // payload.state_size = payload.plStateSize + 6*2;
-
-  // self.state_size = self.plStateSize + 6*self.numOfquads
-  // #13 for the payload and (3+3)*n for each cable angle and its derivative
-
   size_t i = 0;
-  for (auto &[k, v] : uavs) {
-    v.state = uav_states.at(i);
+  for (size_t i = 0; i < payload.numOfquads; i++) {
     ctrlInputs.row(i) = ctrAll * uav_controls.at(i);
-    i++;
   }
 
-  payload.stateEvolution(ctrlInputs, uavs, uavs_params);
+  payload.check();
 
-  Eigen::VectorXd loadState = payload.state;
+  Eigen::VectorXd next_state(payload.nx);
+  next_state.setZero();
+
+  Eigen::VectorXd state(payload.nx);
+  state.setZero();
+
+  state.segment(0, 13 + 2 * 6) =
+      from_stdvect_to_eigen(payload_state.at(time_step));
+
+  payload.get_state_uav_i(0, state).segment(0, 7) =
+      uav_states.at(0).segment(6, 7);
+
+  payload.get_state_uav_i(1, state).segment(0, 7) =
+      uav_states.at(1).segment(6, 7);
+
+  payload.stateEvolution(next_state, state, ctrlInputs);
+
+  // payload.stateEvolution(ctrlInputs, uavs, uavs_params);
   Eigen::VectorXd payload_state_next =
       from_stdvect_to_eigen(payload_state.at(time_step + 1));
 
-  std::cout << "difference against next state -- this should be zero!!"
+  std::cout << "difference against next state Payload w cables -- this should "
+               "be zero!!"
             << std::endl;
-  std::cout << (payload_state_next - loadState).transpose() << std::endl;
+  std::cout << (next_state.head(payload.payload_w_cables_nx) -
+                payload_state_next)
+                   .transpose()
+            << std::endl;
 
   std::cout
       << "pos  diff: "
-      << (loadState.segment<3>(0) - payload_state_next.segment<3>(0)).norm()
+      << (next_state.segment<3>(0) - payload_state_next.segment<3>(0)).norm()
       << std::endl;
   std::cout
       << "vel  diff: "
-      << (loadState.segment<3>(3) - payload_state_next.segment<3>(3)).norm()
+      << (next_state.segment<3>(3) - payload_state_next.segment<3>(3)).norm()
       << std::endl;
 
   std::cout << "quat diff: "
-            << (loadState.segment<4>(6) -
+            << (next_state.segment<4>(6) -
                 payload_state_next.segment<4>(6).normalized())
                    .norm()
             << std::endl;
 
   std::cout << "dif is " << std::endl;
-  std::cout << loadState.segment<4>(6) - payload_state_next.segment<4>(6) << std::endl;
+  std::cout << next_state.segment<4>(6) - payload_state_next.segment<4>(6)
+            << std::endl;
 
   std::cout
       << "w    diff: "
-      << (loadState.segment<3>(10) - payload_state_next.segment<3>(10)).norm()
-      << std::endl;
-
-
-  std::cout
-      << "other    diff: "
-      << (loadState.segment(13,3) - payload_state_next.segment(13,3)).norm()
+      << (next_state.segment<3>(10) - payload_state_next.segment<3>(10)).norm()
       << std::endl;
 
   std::cout
       << "other    diff: "
-      << (loadState.segment(16,3) - payload_state_next.segment(16,3)).norm()
+      << (next_state.segment(13, 3) - payload_state_next.segment(13, 3)).norm()
       << std::endl;
 
   std::cout
       << "other    diff: "
-      << (loadState.segment(19,3) - payload_state_next.segment(19,3)).norm()
+      << (next_state.segment(16, 3) - payload_state_next.segment(16, 3)).norm()
       << std::endl;
 
   std::cout
       << "other    diff: "
-      << (loadState.segment(22,3) - payload_state_next.segment(22,3)).norm()
+      << (next_state.segment(19, 3) - payload_state_next.segment(19, 3)).norm()
       << std::endl;
 
-
-
+  std::cout
+      << "other    diff: "
+      << (next_state.segment(22, 3) - payload_state_next.segment(22, 3)).norm()
+      << std::endl;
 
   std::cout << "lets compare uav 1" << std::endl;
-
   Eigen::VectorXd next1 = from_stdvect_to_eigen(cfs1.at(time_step + 1));
   Eigen::VectorXd next2 = from_stdvect_to_eigen(cfs2.at(time_step + 1));
 
   std::cout << "uav 1 " << std::endl;
-  std::cout
-      << "quat "
-      << (next1.segment(6, 4) - uavs.at("uav_1").state.segment(6, 4)).norm()
-      << std::endl;
+  std::cout << "quat "
+            << (next1.segment(6, 4) -
+                payload.get_state_uav_i(0, next_state).segment(0, 4))
+                   .norm()
+            << std::endl;
 
-  std::cout
-      << "w "
-      << (next1.segment(10, 3) - uavs.at("uav_1").state.segment(10, 3)).norm()
-      << std::endl;
+  std::cout << "w "
+            << (next1.segment(10, 3) -
+                payload.get_state_uav_i(0, next_state).segment(4, 3))
+                   .norm()
+            << std::endl;
 
   std::cout << "uav 2 " << std::endl;
-  std::cout
-      << "quat "
-      << (next2.segment(6, 4) - uavs.at("uav_2").state.segment(6, 4)).norm()
-      << std::endl;
+  std::cout << "quat "
+            << (next2.segment(6, 4) -
+                payload.get_state_uav_i(1, next_state).segment(0, 4))
+                   .norm()
+            << std::endl;
 
-  std::cout
-      << "w "
-      << (next2.segment(10, 3) - uavs.at("uav_2").state.segment(10, 3)).norm()
-      << std::endl;
+  std::cout << "w "
+            << (next2.segment(10, 3) -
+                payload.get_state_uav_i(1, next_state).segment(4, 3))
+                   .norm()
+            << std::endl;
 
   // lets compare!
+  //
 }
