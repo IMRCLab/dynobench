@@ -52,7 +52,7 @@ if __name__ == "__main__":
     #
     
 
-    if args.robot == "quad3dpayload" or args.robot == "point":
+    if args.robot == "quad3dpayload" or args.robot == "point" or args.robot == "rigid":
         quad3dpayload_viewer.quad3dpayload_meshcatViewer()
         sys.exit(0)
 
