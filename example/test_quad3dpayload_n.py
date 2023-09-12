@@ -477,7 +477,7 @@ def main():
                 robot.updateControllerDict(ctrl, r_idx)
             u = np.array(flatten_list(u))
             # add some noise to the actuation
-            u += np.random.normal(0.0, 0.05, len(u))
+            u += np.random.normal(0.0, 0.025, len(u))
             robot.step(states[k+1], states[k], u)
             # exit()
             # time.sleep(0.1)
