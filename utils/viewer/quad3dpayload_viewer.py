@@ -501,13 +501,15 @@ def quad3dpayload_meshcatViewer():
                 visualizer.updateVis(state, frame=frame)
         visualizer.vis.set_animation(anim)
 
-        res = visualizer.vis.static_html()
-        # save to a file
-        # Path(args.output).mkdir(exist_ok=True)
-        with open(args.output, "w") as f:
-            f.write(res)
-    # else: 
+        # res = visualizer.vis.static_html()
+        # # save to a file
+        # # Path(args.output).mkdir(exist_ok=True)
+        # with open(args.output, "w") as f:
+        #     f.write(res)
+    else: 
 
+        while True:
+            time.sleep(0.01)
 
         # point1 =  [-0.000187059,-0.202631,0.31554]
         # point2 = [-2.62275e-05,-0.16202,0.252487]

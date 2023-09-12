@@ -4,6 +4,8 @@
 #include "dynobench/for_each_macro.hpp"
 #include "dynobench/robot_models_base.hpp"
 
+#include "__quadrotor_payload_rigid.hpp"
+
 inline Eigen::VectorXd create_vector(const std::vector<double> &v) {
   Eigen::VectorXd out(v.size());
   for (size_t i = 0; i < v.size(); ++i) {
@@ -19,10 +21,10 @@ struct Quad3dpayload_n_params {
   Quad3dpayload_n_params(const char *file) { read_from_yaml(file); }
   Quad3dpayload_n_params() = default;
 
-  int num_robots;// = 2;
+  int num_robots; // = 2;
   bool point_mass = true;
 
-  double col_size_robot = .15;    // radius
+  double col_size_robot = .15;   // radius
   double col_size_payload = .01; // radius
   //
   //
@@ -39,9 +41,18 @@ struct Quad3dpayload_n_params {
   Eigen::VectorXd m; // kg
 
   Eigen::VectorXd l_payload; // m
-  Eigen::VectorXd J_vx; 
-  Eigen::VectorXd J_vy; 
-  Eigen::VectorXd J_vz; 
+  Eigen::VectorXd J_vx;
+  Eigen::VectorXd J_vy;
+  Eigen::VectorXd J_vz;
+
+  Eigen::VectorXd attPx;
+  Eigen::VectorXd attPy;
+  Eigen::VectorXd attPz;
+
+
+
+
+
   double m_payload = 0.0054; // kg
 
   double g = 9.81;
@@ -49,7 +60,6 @@ struct Quad3dpayload_n_params {
   double arm_length = 0.046; // m
   double t2t = 0.006;        // thrust-to-torque ratio
   double dt = .01;
-
 
   std::string shape = "sphere";
   Eigen::Vector4d distance_weights = Eigen::Vector4d(1, 1, .1, .1);
@@ -68,6 +78,9 @@ struct Quad3dpayload_n_params {
   void write(std::ostream &out) {
     const std::string be = "";
     const std::string af = ": ";
+
+
+
 
     out << be << STR(filename, af) << std::endl;
     out << be << STR(point_mass, af) << std::endl;
@@ -93,13 +106,19 @@ struct Quad3dpayload_n_params {
     out << be << STR_VV(m, af) << std::endl;
     out << be << STR_VV(l_payload, af) << std::endl;
     out << be << STR_VV(distance_weights, af) << std::endl;
-    out << be << STR_VV(J_v, af)  << std::endl;
+    out << be << STR_VV(J_v, af) << std::endl;
     out << be << STR_VV(J_vx, af) << std::endl;
     out << be << STR_VV(J_vy, af) << std::endl;
     out << be << STR_VV(J_vz, af) << std::endl;
     out << be << STR_VV(size, af) << std::endl;
     out << be << STR_VV(u_lb, af) << std::endl;
     out << be << STR_VV(u_ub, af) << std::endl;
+
+
+    out << be << STR_VV(attPx, af) << std::endl;
+    out << be << STR_VV(attPy, af) << std::endl;
+    out << be << STR_VV(attPz, af) << std::endl;
+
   }
 };
 
@@ -107,13 +126,13 @@ struct Model_quad3dpayload_n : Model_robot {
 
   using Matrix34 = Eigen::Matrix<double, 3, 4>;
 
-
   // Regularization in the optimization problem.
   // @KHALED please check this in the constructor!! --
   // you have to make this genereal
   Eigen::VectorXd state_weights;
-  Eigen::VectorXd state_ref ;
+  Eigen::VectorXd state_ref;
 
+  PayloadSystem payload_system;
 
   std::vector<std::unique_ptr<fcl::CollisionObjectd>>
       collision_objects; // QUIM : TODO move this to the base class!
@@ -260,6 +279,10 @@ struct Model_quad3dpayload_n : Model_robot {
 
   const bool adapt_vel = true;
   bool check_inner = true;
+
+  Eigen::VectorXd x_coltrans;
+  Eigen::VectorXd xnext_coltrans;
+  Eigen::VectorXd u_coltrans;
 
   std::shared_ptr<fcl::BroadPhaseCollisionManagerd> col_mng_robots_;
 

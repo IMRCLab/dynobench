@@ -221,13 +221,12 @@ void inline finite_diff_jac(
     const Eigen::VectorXd &x, size_t nout, Eigen::Ref<Eigen::MatrixXd> J,
     double eps = 1e-6) {
 
-  Eigen::VectorXd y(nout);
+  Eigen::VectorXd y(nout), ye(nout), xe(nout);
 
   fun(x, y);
 
   for (size_t i = 0; i < static_cast<size_t>(x.size()); i++) {
-    Eigen::VectorXd xe = x;
-    Eigen::VectorXd ye(nout);
+    xe = x;
     xe(i) += eps;
     fun(xe, ye);
     J.col(i) = (ye - y) / eps;
@@ -608,5 +607,14 @@ Eigen::VectorXd inline mk_eigen_x(std::initializer_list<double> l) {
 
   return x;
 }
+
+using Vref = Eigen::Ref<Eigen::VectorXd>;
+using V3ref = Eigen::Ref<Eigen::Vector3d>;
+using V4ref = Eigen::Ref<Eigen::Vector4d>;
+
+using Vcref = const Eigen::Ref<const Eigen::VectorXd>&;
+using V3cref = const Eigen::Ref<const Eigen::Vector3d>&;
+using V4cref = const Eigen::Ref<const Eigen::Vector4d>&;
+
 
 } // namespace dynobench

@@ -42,7 +42,9 @@ add_library(
   ./src/quadrotor_payload_dynamics_autogen_n3_p.cpp
   ./src/quadrotor_payload_dynamics_autogen_n4_p.cpp
   ./src/quadrotor_payload_dynamics_autogen_n5_p.cpp
-  ./src/quadrotor_payload_dynamics_autogen_n6_p.cpp)
+  ./src/quadrotor_payload_dynamics_autogen_n6_p.cpp
+  ./src/__quadrotor_payload_rigid_n.cpp)
+
 
 add_library(dynobench::dynobench ALIAS dynobench)
 

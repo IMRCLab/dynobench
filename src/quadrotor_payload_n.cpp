@@ -46,6 +46,10 @@ void Quad3dpayload_n_params::read_from_yaml(YAML::Node &node) {
   set_from_yaml(node, VAR_WITH_NAME(u_lb));
 
   set_from_yaml(node, VAR_WITH_NAME(size));
+
+  set_from_yaml(node, VAR_WITH_NAME(attPx));
+  set_from_yaml(node, VAR_WITH_NAME(attPy));
+  set_from_yaml(node, VAR_WITH_NAME(attPz));
 }
 
 void Quad3dpayload_n_params::read_from_yaml(const char *file) {
@@ -60,7 +64,8 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
     const Eigen::VectorXd &p_ub)
 
     : Model_robot(std::make_shared<Rn>(6 + 6 * params.num_robots +
-                                       7 * params.num_robots),
+                                       7 * params.num_robots +
+                                       (params.point_mass ? 0 : 7)),
                   4 * params.num_robots),
       params(params) // @KHALED TODO
 {
@@ -293,6 +298,26 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
   state_ref(6 + 6 + 2) = -.9;
 
   k_acc = 1.;
+
+  if (!params.point_mass) {
+    std::vector<UAV> uavs(params.num_robots);
+    // TODO: pass the parameters?
+
+    for (size_t i = 0; i < params.num_robots; ++i) {
+      uavs.at(i).pos_fr_payload =
+          Eigen::Vector3d(params.attPx(i), params.attPy(i), params.attPz(i));
+      uavs.at(i).l_c = params.l_payload(i);
+      uavs.at(i).I =
+          Eigen::Vector3d(params.J_vx(i), params.J_vy(i), params.J_vz(i));
+      uavs.at(i).m = params.m(i);
+    }
+    payload_system = PayloadSystem(uavs);
+    payload_system.m_payload = params.m_payload;
+  }
+
+  x_coltrans.resize(nx);
+  xnext_coltrans.resize(nx);
+  u_coltrans.resize(nu);
 }
 
 Eigen::VectorXd Model_quad3dpayload_n::get_x0(const Eigen::VectorXd &x) {
@@ -477,23 +502,13 @@ void Model_quad3dpayload_n::calcV(Eigen::Ref<Eigen::VectorXd> ff,
     apply_fun(calcV_n5_p);
 
   } else if (params.num_robots == 6 && params.point_mass) {
-
     apply_fun(calcV_n6_p);
-
   }
 
-  else if (params.num_robots == 1 && !params.point_mass) {
-
-    NOT_IMPLEMENTED;
-  }
-
-  else if (params.num_robots == 2 && !params.point_mass) {
-    NOT_IMPLEMENTED;
-  } else if (params.num_robots == 3 && !params.point_mass) {
-
-    NOT_IMPLEMENTED;
-  } else {
-    NOT_IMPLEMENTED;
+  else if (!params.point_mass) {
+    //
+    payload_system.getPayloadwCablesAcceleration(
+        ff.head(payload_system.accl_x.size()), x, u);
   }
 }
 
@@ -585,13 +600,24 @@ void Model_quad3dpayload_n::step(Eigen::Ref<Eigen::VectorXd> xnext,
 
   }
 
-  else if (params.num_robots == 2 && !params.point_mass) {
-    NOT_IMPLEMENTED;
+  else if (!params.point_mass) {
 
-  }
+    CHECK_EQ(x_coltrans.size(), x.size(), "");
+    CHECK_EQ(xnext_coltrans.size(), x.size(), "");
+    CHECK_EQ(xnext_coltrans.size(), xnext.size(), "");
+    CHECK_EQ(u_coltrans.size(), u.size(), "");
 
-  else if (params.num_robots == 3 && !params.point_mass) {
-    NOT_IMPLEMENTED;
+    // convert format of dynobench to format of coltrans
+
+    // Convert the u's
+    state_dynobench2coltrans(x_coltrans, x, payload_system.numOfquads);
+
+    control_dynobench2coltrans(u_coltrans, u, payload_system.uavs);
+
+    // ctrl input is [ f, taux , tauz , tauz ]
+    payload_system.stateEvolution(xnext_coltrans, x_coltrans, u_coltrans, dt);
+    state_coltrans2dynobench(xnext, xnext_coltrans, payload_system.numOfquads);
+
   } else {
     NOT_IMPLEMENTED;
   }
@@ -652,14 +678,27 @@ void Model_quad3dpayload_n::stepDiff(Eigen::Ref<Eigen::MatrixXd> Fx,
     NOT_IMPLEMENTED;
   }
 
-  else if (params.num_robots == 2 && !params.point_mass) {
+  else if (!params.point_mass) {
 
-    NOT_IMPLEMENTED;
+    double tol = 1e-7;
+    finite_diff_jac(
+        [&](const Eigen::VectorXd &xx, Eigen::Ref<Eigen::VectorXd> yy) {
+          step(yy, xx, u, dt);
+        },
+        x, nx, Fx, tol);
+
+    finite_diff_jac(
+        [&](const Eigen::VectorXd &uu, Eigen::Ref<Eigen::VectorXd> yy) {
+          // std::cout << "uu: " << uu.size() << std::endl;
+          // std::cout << "yy: " << yy.size() << std::endl;
+          // std::cout << "x: " << x.size() << std::endl;
+          step(yy, x, uu, dt);
+        },
+        u, nx, Fu, tol);
+
   }
 
-  else if (params.num_robots == 3 && !params.point_mass) {
-    NOT_IMPLEMENTED;
-  } else {
+  else {
     NOT_IMPLEMENTED;
   }
 }
