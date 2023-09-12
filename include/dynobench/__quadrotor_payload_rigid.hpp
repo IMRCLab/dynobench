@@ -108,6 +108,7 @@ public:
   // Eigen::VectorXd plstate;
   int payload_w_cables_nv;
 
+  int nacc;
   int nx;
   int payload_nv;
   int payload_nx;

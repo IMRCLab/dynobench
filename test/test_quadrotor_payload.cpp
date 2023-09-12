@@ -417,3 +417,48 @@ BOOST_AUTO_TEST_CASE(test_rigid_body) {
   }
   std::cout << sw.elapsed_ms() / N << std::endl;
 }
+
+BOOST_AUTO_TEST_CASE(test_c) {
+
+  Problem problem(base_path "envs/quad3d_payload/empty0_2_rig_hover.yaml");
+
+  dynobench::Quad3dpayload_n_params params;
+  params.read_from_yaml(base_path "models/rigid_2.yaml");
+  auto model = mk<dynobench::Model_quad3dpayload_n>(params);
+
+  CollisionOut out;
+  model->collision_distance(problem.start, out);
+
+  out.write(std::cout);
+}
+
+BOOST_AUTO_TEST_CASE(test_rigid_body3) {
+
+  // continue here!!
+
+  dynobench::Quad3dpayload_n_params params;
+  params.read_from_yaml(base_path "models/rigid_3.yaml");
+
+  auto model = mk<dynobench::Model_quad3dpayload_n>(params);
+
+  Problem problem(base_path "envs/quad3d_payload/empty0_3_rig_hover.yaml");
+
+  Eigen::VectorXd x = problem.start;
+
+  Eigen::VectorXd xnext(model->nx);
+  Eigen::VectorXd u(model->nu);
+  
+  u.segment(0, 4).setConstant(1.2);
+
+  Trajectory traj;
+
+  traj.states.push_back(x);
+  for (size_t i = 0; i < 100; i++) {
+    model->step(xnext, x, u, model->ref_dt);
+    traj.states.push_back(xnext);
+    std::cout << "dif " << (x-xnext).transpose() << std::endl;
+    traj.actions.push_back(u);
+    x = xnext;
+  }
+  traj.to_yaml_format("/tmp/traj_rollout.yaml");
+}

@@ -316,7 +316,8 @@ void PayloadSystem::getPayloadwCablesAcceleration(Vref acc, Vcref x, Vcref u) {
   getuinp(u_inp, x, u);
 
   // Bq.inverse() * (Nq + u_inp)
-  acc.segment(0, payload_w_cables_nv) = Bq.lu().solve(Nq + u_inp );
+  // acc.segment(0, payload_w_cables_nv) = Bq.lu().solve(Nq + u_inp);
+  acc.segment(0, payload_w_cables_nv) = Bq.inverse()*(Nq + u_inp);
   acc.segment(0, 3) -= Eigen::Vector3d(
       0, 0, 9.81); // TODO: ask Khaled -- are you sure this is correct?
 
@@ -376,6 +377,7 @@ void PayloadSystem::stateEvolution(
     Eigen::Vector3d qdot =
         wi.cross(qi); // qdot using Eigen's cross product method
     next_state.segment(k, 3) = qdot * dt + qi;
+    next_state.segment(k, 3).normalize();
 
     k += 3;
     j += 3;
@@ -395,6 +397,9 @@ void PayloadSystem::stateEvolution(
     get_state_uav_i(ii, next_state).segment(0, 4) = qNext;
     get_state_uav_i(ii, next_state).segment(4, 3) = wNext;
   }
+
+  // std::cout << "diference in coltrans " << std::endl;
+  // std::cout << next_state - state << std::endl;
 }
 
 // fro
@@ -406,11 +411,19 @@ void state_dynobench2coltrans(Eigen::Ref<Eigen::VectorXd> out,
   out = in;
 
   // flip quaternion of payload
-  int base = 6;
-  out(base) = in(base + 3);
-  out(base + 1) = in(base);
-  out(base + 2) = in(base + 1);
-  out(base + 3) = in(base + 2);
+  {
+    int base_dyno = 3;
+    int base_coltrans = 6;
+    out(base_coltrans) = in(base_dyno + 3);
+    out(base_coltrans + 1) = in(base_dyno);
+    out(base_coltrans + 2) = in(base_dyno + 1);
+    out(base_coltrans + 3) = in(base_dyno + 2);
+  }
+
+  // copy the velocities
+  {
+    out.segment(3, 3) = in.segment(7, 3);
+  }
 
   // from [ q, w, q, w, ...] to [ (q,q,...) , (w,...) ]
   for (size_t i = 0; i < num_uavs; i++) {
@@ -418,6 +431,7 @@ void state_dynobench2coltrans(Eigen::Ref<Eigen::VectorXd> out,
     out.segment(13 + 3 * num_uavs + i * 3, 3) = in.segment(13 + i * 6 + 3, 3);
   }
 
+  // [ (q,w) , (q,w) ... ] in both
   for (size_t i = 0; i < num_uavs; i++) {
     // flip the quaternion
     int base = 13 + num_uavs * 6 + 7 * i;
@@ -434,11 +448,16 @@ void state_coltrans2dynobench(Eigen::Ref<Eigen::VectorXd> out,
 
   out = in;
   // flip quaternion of payload
-  int base = 6;
-  out(base) = in(base + 1);
-  out(base + 1) = in(base + 2);
-  out(base + 2) = in(base + 3);
-  out(base + 3) = in(base);
+  {
+    int base_dyno = 3;
+    int base_coltrans = 6;
+    out(base_dyno) = in(base_coltrans + 1);
+    out(base_dyno + 1) = in(base_coltrans + 2);
+    out(base_dyno + 2) = in(base_coltrans + 3);
+    out(base_dyno + 3) = in(base_coltrans);
+  }
+
+  { out.segment(7, 3) = in.segment(3, 3); }
 
   // from [ (q,q,...) , (w,...) ] to [ q, w, q, w, ...]
   for (size_t i = 0; i < num_uavs; i++) {

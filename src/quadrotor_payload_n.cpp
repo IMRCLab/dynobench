@@ -137,13 +137,14 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
   goal_weight.resize(nx);
   goal_weight.setOnes();
 
-  for (size_t i = 0; i < params.num_robots; i++) {
-    goal_weight.segment(6 + 6 * params.num_robots + i * 7, 4).setConstant(.001);
-  }
+  nx_payload = params.point_mass ? 6 : 13;
 
-  // for (size_t i = 0; i < params.num_robots; i++) {
-  //   goal_weight.segment(6 + i * 6, 3).setConstant(.01);
-  // }
+  for (size_t i = 0; i < params.num_robots; i++) {
+    // goal_weight.segment(nx_payload + 6 * params.num_robots + i * 7, 4)
+    //     .setConstant(.001);
+    goal_weight.segment(nx_payload + 6 * params.num_robots + i * 7, 7)
+        .setConstant(.001);
+  }
 
   x_desc = {"xp [m]",     "yp [m]",      "zp [m]",      "vpx [m/s]",
             "vpy [m/s]",  "vpz [m/s]",   "qcx []",      "qcy []",
@@ -288,16 +289,17 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
   // IMPORTANT: we add a little a bit of regularization to having the cables
   // looking upwards
   // @ TODO: khaled: make this generci
+
   state_weights = Vxd::Zero(nx);
   state_ref = Vxd::Zero(nx);
 
-  state_weights.segment(6, 3).setConstant(0.1);
-  state_weights.segment(6 + 6, 3).setConstant(0.1);
+  for (size_t i = 0; i < params.num_robots; ++i) {
+    state_weights.segment(nx_payload + 6 * i, 3).setConstant(0.1);
+    state_ref(nx_payload + 6 * i + 2) = -.9;
+  }
 
-  state_ref(6 + 2) = -.9;
-  state_ref(6 + 6 + 2) = -.9;
 
-  k_acc = 1.;
+  k_acc = 1; // TODO: change this!!
 
   if (!params.point_mass) {
     std::vector<UAV> uavs(params.num_robots);
@@ -327,7 +329,7 @@ Eigen::VectorXd Model_quad3dpayload_n::get_x0(const Eigen::VectorXd &x) {
   Eigen::VectorXd out(nx);
   out.setZero();
   out.head(6) = x.head(6);
-  size_t c_idx = 6;
+  size_t c_idx = nx_payload;
   for (size_t i = 0; i < params.num_robots; ++i) {
     out(c_idx + 6 * i + 3 - 1) = -1;
     out(c_idx + 6 * params.num_robots + 7 * i + 4 - 1) = 1;
@@ -400,6 +402,8 @@ void Model_quad3dpayload_n::transformation_collision_geometries(
     // ROBOT
     Eigen::Vector3d pos_robot;
     get_position_robot_i(x, i, pos_robot);
+    // std::cout << "pos robot i " << i << std::endl;
+    // std::cout << pos_robot.transpose() << std::endl;
     fcl::Transform3d result;
     result = Eigen::Translation<double, 3>(pos_robot);
     ts.at(1 + params.num_robots + i) = result;
@@ -507,8 +511,11 @@ void Model_quad3dpayload_n::calcV(Eigen::Ref<Eigen::VectorXd> ff,
 
   else if (!params.point_mass) {
     //
-    payload_system.getPayloadwCablesAcceleration(
-        ff.head(payload_system.accl_x.size()), x, u);
+    ff.setZero();
+    state_dynobench2coltrans(x_coltrans, x, payload_system.numOfquads);
+    control_dynobench2coltrans(u_coltrans, u, payload_system.uavs);
+    payload_system.getPayloadwCablesAcceleration(ff.head(payload_system.nacc),
+                                                 x_coltrans, u_coltrans);
   }
 }
 
@@ -550,18 +557,17 @@ void Model_quad3dpayload_n::calcDiffV(
     apply_fun(calcJ_n6_p);
   }
 
-  else if (params.num_robots == 1 && !params.point_mass) {
-    NOT_IMPLEMENTED;
-  }
+  else if (params.point_mass) {
 
-  else if (params.num_robots == 2 && !params.point_mass) {
-    NOT_IMPLEMENTED;
-  }
+    double tol = 1e-7;
 
-  else if (params.num_robots == 3 && !params.point_mass) {
-    NOT_IMPLEMENTED;
-  } else {
-    NOT_IMPLEMENTED;
+    finite_diff_jac([&](const Eigen::VectorXd &xx,
+                        Eigen::Ref<Eigen::VectorXd> yy) { calcV(yy, xx, u); },
+                    x, nx, Jv_x, tol);
+
+    finite_diff_jac([&](const Eigen::VectorXd &uu,
+                        Eigen::Ref<Eigen::VectorXd> yy) { calcV(yy, x, uu); },
+                    u, nx, Jv_u, tol);
   }
 }
 
@@ -689,9 +695,6 @@ void Model_quad3dpayload_n::stepDiff(Eigen::Ref<Eigen::MatrixXd> Fx,
 
     finite_diff_jac(
         [&](const Eigen::VectorXd &uu, Eigen::Ref<Eigen::VectorXd> yy) {
-          // std::cout << "uu: " << uu.size() << std::endl;
-          // std::cout << "yy: " << yy.size() << std::endl;
-          // std::cout << "x: " << x.size() << std::endl;
           step(yy, x, uu, dt);
         },
         u, nx, Fu, tol);
@@ -707,19 +710,19 @@ double
 Model_quad3dpayload_n::distance(const Eigen::Ref<const Eigen::VectorXd> &x,
                                 const Eigen::Ref<const Eigen::VectorXd> &y) {
 
-  CHECK_EQ(x.size(), nx, AT)
-  CHECK_EQ(y.size(), nx, AT)
-
+  // CHECK_EQ(x.size(), nx, AT)
+  // CHECK_EQ(y.size(), nx, AT)
+  //
   Eigen::VectorXd diff(x.size());
-  Eigen::VectorXd dist_weights(x.size());
-  dist_weights.setOnes();
-  // set quaternion weights to 0.01
-  for (size_t i = 0; i < params.num_robots; ++i) {
-    dist_weights.segment(6 + 6 * params.num_robots + i * 7, 4)
-        .setConstant(.001);
-  }
+  // Eigen::VectorXd dist_weights(x.size());
+  // dist_weights.setOnes();
+  // // set quaternion weights to 0.01
+  // for (size_t i = 0; i < params.num_robots; ++i) {
+  //   dist_weights.segment(6 + 6 * params.num_robots + i * 7, 4)
+  //       .setConstant(.001);
+  // }
 
-  diff = (x - y).cwiseProduct(dist_weights);
+  diff = (x - y).cwiseProduct(goal_weight);
   return diff.norm();
 }
 

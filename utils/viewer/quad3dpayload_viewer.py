@@ -451,7 +451,6 @@ def quad3dpayload_meshcatViewer():
     # visualizer.vis["col1"].set_object(
     #     g.Line(g.PointsGeometry(points), g.LineBasicMaterial()))
 
-
     # name = input("press any key on terminal to close: ")
     # print("closing")
 
@@ -492,11 +491,12 @@ def quad3dpayload_meshcatViewer():
             desired = True
             visualizer.draw_traces(np.array(states_d), quadNum, pType, lengths, desired)
         desired = False
-        visualizer.draw_traces(np.array(states), quadNum, pType, lengths, desired)
-        print("shape of states: ", np.array(states).shape)
+        states_np = np.asfarray(states)
+        visualizer.draw_traces(states_np, quadNum, pType, lengths, desired)
+        print("shape of states: ", states_np.shape)
 
         anim = Animation()
-        for k, state in enumerate(states):
+        for k, state in enumerate(states_np):
             with anim.at_frame(visualizer.vis, k) as frame:
                 visualizer.updateVis(state, frame=frame)
         visualizer.vis.set_animation(anim)

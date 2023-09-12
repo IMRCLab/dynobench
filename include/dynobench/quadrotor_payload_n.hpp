@@ -49,10 +49,6 @@ struct Quad3dpayload_n_params {
   Eigen::VectorXd attPy;
   Eigen::VectorXd attPz;
 
-
-
-
-
   double m_payload = 0.0054; // kg
 
   double g = 9.81;
@@ -78,9 +74,6 @@ struct Quad3dpayload_n_params {
   void write(std::ostream &out) {
     const std::string be = "";
     const std::string af = ": ";
-
-
-
 
     out << be << STR(filename, af) << std::endl;
     out << be << STR(point_mass, af) << std::endl;
@@ -114,11 +107,9 @@ struct Quad3dpayload_n_params {
     out << be << STR_VV(u_lb, af) << std::endl;
     out << be << STR_VV(u_ub, af) << std::endl;
 
-
     out << be << STR_VV(attPx, af) << std::endl;
     out << be << STR_VV(attPy, af) << std::endl;
     out << be << STR_VV(attPz, af) << std::endl;
-
   }
 };
 
@@ -133,6 +124,7 @@ struct Model_quad3dpayload_n : Model_robot {
   Eigen::VectorXd state_ref;
 
   PayloadSystem payload_system;
+  int nx_payload;
 
   std::vector<std::unique_ptr<fcl::CollisionObjectd>>
       collision_objects; // QUIM : TODO move this to the base class!
@@ -166,7 +158,7 @@ struct Model_quad3dpayload_n : Model_robot {
                 Eigen::Ref<Eigen::Vector3d> out) {
     // NOT_IMPLEMENTED_TODO; // @KHALED
     // This is for pointmass payload only, if rigid body --> 13+3*i
-    int qc_idx = 6 + 6 * i;
+    int qc_idx = nx_payload + 6 * i;
     out = x.segment(qc_idx, 3);
   }
 
@@ -213,7 +205,15 @@ struct Model_quad3dpayload_n : Model_robot {
     get_payload_pos(x, payload_pos);
     Eigen::Vector3d qc;
     get_qc_i(x, i, qc);
-    out = payload_pos - qc * params.l_payload(i);
+
+    if (params.point_mass) {
+      out = payload_pos -  qc * params.l_payload(i);
+    } else {
+      out = payload_pos +
+            Eigen::Quaterniond(x.segment<4>(3)).toRotationMatrix() *
+                payload_system.uavs.at(i).pos_fr_payload -
+            qc * params.l_payload(i);
+    }
   }
 
   virtual void
@@ -236,7 +236,16 @@ struct Model_quad3dpayload_n : Model_robot {
     get_payload_pos(x, payload_pos);
     Eigen::Vector3d qc;
     get_qc_i(x, i, qc);
-    out = payload_pos - qc * params.l_payload(i) * 0.5;
+
+    if (params.point_mass)
+      out = payload_pos - qc * params.l_payload(i) * 0.5;
+    else {
+      // TODO: Khaled -- cable directions are in world frame, right?
+      out = payload_pos +
+            Eigen::Quaterniond(x.segment<4>(3)).toRotationMatrix() *
+                payload_system.uavs.at(i).pos_fr_payload -
+            qc * params.l_payload(i) * 0.5;
+    }
   }
 
   // NOTE: there are infinite solutions to this problem
@@ -244,7 +253,6 @@ struct Model_quad3dpayload_n : Model_robot {
   // I just way this to update the capsule orientation
   virtual void quaternion_cable_i(const Eigen::Ref<const Eigen::VectorXd> &x,
                                   int i, Eigen::Ref<Eigen::Vector4d> out) {
-
     CHECK_LEQ(i, params.num_robots - 1, "");
     Eigen::Vector3d from(0., 0., -1.);
     Eigen::Vector3d to;
@@ -309,9 +317,12 @@ struct Model_quad3dpayload_n : Model_robot {
     // xout.segment<4>(12).normalize();
     // xout.segment<3>(3).normalize();
 
+    if (!params.point_mass)
+      xout.segment(6, 4).normalize();
+
     for (int i = 0; i < params.num_robots; ++i) {
-      xout.segment(6 + 6 * i, 3).normalize();
-      xout.segment(6 + 6 * params.num_robots + 7 * i, 4).normalize();
+      xout.segment(nx_payload + 6 * i, 3).normalize();
+      xout.segment(nx_payload + 6 * params.num_robots + 7 * i, 4).normalize();
     }
   }
 
