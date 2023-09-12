@@ -501,11 +501,11 @@ def quad3dpayload_meshcatViewer():
                 visualizer.updateVis(state, frame=frame)
         visualizer.vis.set_animation(anim)
 
-        # res = visualizer.vis.static_html()
-        # # save to a file
-        # # Path(args.output).mkdir(exist_ok=True)
-        # with open(args.output, "w") as f:
-        #     f.write(res)
+        res = visualizer.vis.static_html()
+        # save to a file
+        # Path(args.output).mkdir(exist_ok=True)
+        with open(args.output, "w") as f:
+            f.write(res)
     else: 
 
         while True:
