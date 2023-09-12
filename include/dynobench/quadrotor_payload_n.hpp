@@ -49,6 +49,8 @@ struct Quad3dpayload_n_params {
   Eigen::VectorXd attPy;
   Eigen::VectorXd attPz;
 
+  Eigen::Vector3d J_p;
+
   double m_payload = 0.0054; // kg
 
   double g = 9.81;
@@ -75,6 +77,7 @@ struct Quad3dpayload_n_params {
     const std::string be = "";
     const std::string af = ": ";
 
+    out << be << STR_VV(J_p, af) << std::endl;
     out << be << STR(filename, af) << std::endl;
     out << be << STR(point_mass, af) << std::endl;
     out << be << STR(num_robots, af) << std::endl;
@@ -207,7 +210,7 @@ struct Model_quad3dpayload_n : Model_robot {
     get_qc_i(x, i, qc);
 
     if (params.point_mass) {
-      out = payload_pos -  qc * params.l_payload(i);
+      out = payload_pos - qc * params.l_payload(i);
     } else {
       out = payload_pos +
             Eigen::Quaterniond(x.segment<4>(3)).toRotationMatrix() *
@@ -317,11 +320,20 @@ struct Model_quad3dpayload_n : Model_robot {
     // xout.segment<4>(12).normalize();
     // xout.segment<3>(3).normalize();
 
-    if (!params.point_mass)
-      xout.segment(6, 4).normalize();
+    if (!params.point_mass) {
+      CHECK_LEQ(std::abs(xout.segment(3, 4).norm() - 1), 1e-4, "");
+      xout.segment(3, 4).normalize();
+    }
 
     for (int i = 0; i < params.num_robots; ++i) {
+      CHECK_LEQ(std::abs(xout.segment(nx_payload + 6 * i, 3).norm() - 1), 1e-4,
+                "");
       xout.segment(nx_payload + 6 * i, 3).normalize();
+      CHECK_LEQ(
+          std::abs(xout.segment(nx_payload + 6 * params.num_robots + 7 * i, 4)
+                       .norm() -
+                   1),
+          1e-4, "");
       xout.segment(nx_payload + 6 * params.num_robots + 7 * i, 4).normalize();
     }
   }

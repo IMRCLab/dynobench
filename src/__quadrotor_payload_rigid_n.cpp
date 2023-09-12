@@ -13,7 +13,9 @@ Eigen::Vector4d intergrate_quat_formatC(const Eigen::Vector4d &__quat_p,
                                         const Eigen::Vector3d &wp, double dt) {
 
   Eigen::Vector4d quat_p(__quat_p(1), __quat_p(2), __quat_p(3), __quat_p(0));
-  quat_p.normalize();
+
+  CHECK_LEQ(std::abs(quat_p.norm() - 1.), 1e-6, "");
+
   Eigen::Vector4d __out, __out2;
   Eigen::Vector4d deltaQ;
   __get_quat_from_ang_vel_time(wp * dt, deltaQ, nullptr);
@@ -25,9 +27,11 @@ Eigen::Vector4d intergrate_quat_formatC(const Eigen::Vector4d &__quat_p,
 Eigen::Vector3d rotate_format_C(const Eigen::Vector4d &quat,
                                 const Eigen::Vector3d &v) {
 
-  Eigen::Vector4d q = quat.normalized();
+  // Eigen::Vector4d q = quat.normalized();
+
+  CHECK_LEQ(std::abs(quat.norm() - 1.), 1e-6, "");
   Eigen::Matrix3d R =
-      Eigen::Quaterniond(q(0), q(1), q(2), q(3)).toRotationMatrix();
+      Eigen::Quaterniond(quat(0), quat(1), quat(2), quat(3)).toRotationMatrix();
   return R * v;
 }
 
@@ -35,6 +39,9 @@ Eigen::Vector3d rotate_format_C(const Eigen::Vector4d &quat,
 // something like:
 Eigen::Matrix3d to_matrix_formatC(const Eigen::Vector4d &vec) {
   // TODO: check the order of the quaternion!!
+
+  CHECK_LEQ(std::abs(vec.norm() - 1.), 1e-6, "");
+
   return Eigen::Quaterniond(vec(0), vec(1), vec(2), vec(3)).toRotationMatrix();
 }
 
@@ -157,6 +164,9 @@ void PayloadSystem::getBq(Eigen::Ref<Eigen::MatrixXd> Bq,
     double l = uavs.at(ii).l_c;
 
     Eigen::Vector3d qi = state.segment(k, 3);
+
+    CHECK_LEQ(std::abs(qi.norm() - 1.), 1e-4, "");
+
     k += 3;
 
     Bq.block<3, 3>(i, 0) =
@@ -236,7 +246,7 @@ void PayloadSystem::getNq(Eigen::Ref<Eigen::VectorXd> Nq,
   }
 
   if (!pointmass) {
-    // Assuming J is a member variable representing inertia tensor
+    // Assuming J is a member variable representing inertia tnsor
     Nq.segment(3, 3) -= skew(wl) * J * wl;
   }
 }
@@ -317,7 +327,7 @@ void PayloadSystem::getPayloadwCablesAcceleration(Vref acc, Vcref x, Vcref u) {
 
   // Bq.inverse() * (Nq + u_inp)
   // acc.segment(0, payload_w_cables_nv) = Bq.lu().solve(Nq + u_inp);
-  acc.segment(0, payload_w_cables_nv) = Bq.inverse()*(Nq + u_inp);
+  acc.segment(0, payload_w_cables_nv) = Bq.inverse() * (Nq + u_inp);
   acc.segment(0, 3) -= Eigen::Vector3d(
       0, 0, 9.81); // TODO: ask Khaled -- are you sure this is correct?
 
@@ -421,9 +431,7 @@ void state_dynobench2coltrans(Eigen::Ref<Eigen::VectorXd> out,
   }
 
   // copy the velocities
-  {
-    out.segment(3, 3) = in.segment(7, 3);
-  }
+  { out.segment(3, 3) = in.segment(7, 3); }
 
   // from [ q, w, q, w, ...] to [ (q,q,...) , (w,...) ]
   for (size_t i = 0; i < num_uavs; i++) {

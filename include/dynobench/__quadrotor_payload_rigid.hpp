@@ -46,13 +46,8 @@ struct UAV {
                            const Eigen::Vector4d &curr_q,
                            const Eigen::Vector3d &wdot, double dt);
 
-  void getWdot(Eigen::Ref<Eigen::Vector3d> wdot,
-                              const Eigen::Vector3d &curr_w,
-                              const Eigen::Vector3d &tau);
-
-
-
-
+  void getWdot(Eigen::Ref<Eigen::Vector3d> wdot, const Eigen::Vector3d &curr_w,
+               const Eigen::Vector3d &tau);
 
   double d = 0.046;
   double arm = 0.707106781 * d;
@@ -116,12 +111,10 @@ public:
   bool pointmass = false;
   double m_payload = .0115;
 
-
-
   Eigen::Matrix3d J =
       Eigen::Vector3d(3.0002e-4, 7.7083e-7, 3.0075e-4).asDiagonal();
 
-  Eigen::VectorXd accl; // payload with cables
+  Eigen::VectorXd accl;   // payload with cables
   Eigen::VectorXd accl_x; // full system
   int numOfquads;
 
@@ -140,7 +133,7 @@ public:
   void getBq(Eigen::Ref<Eigen::MatrixXd> Bq,
              const Eigen::Ref<const Eigen::VectorXd> state);
 
-  void getPayloadwCablesAcceleration(Vref acc, Vcref x , Vcref u);
+  void getPayloadwCablesAcceleration(Vref acc, Vcref x, Vcref u);
 
   void getNq(Eigen::Ref<Eigen::VectorXd> Nq,
              const Eigen::Ref<const Eigen::VectorXd> state);
@@ -152,6 +145,38 @@ public:
   void stateEvolution(Eigen::Ref<Eigen::VectorXd> next_state,
                       const Eigen::Ref<const Eigen::VectorXd> &state,
                       const Eigen::Ref<const Eigen::VectorXd> &u, double dt);
+
+  void beautfiy_state(Eigen::Ref<Eigen::VectorXd> state) {
+
+    std::cout << "payload pos " << std::endl;
+    std::cout << state.segment<3>(0).transpose() << std::endl;
+    std::cout << "payload vel " << std::endl;
+    std::cout << state.segment<3>(3).transpose() << std::endl;
+    std::cout << "payload quat " << std::endl;
+    std::cout << state.segment<4>(6).transpose() << std::endl;
+    std::cout << "payload w " << std::endl;
+    std::cout << state.segment<3>(10).transpose() << std::endl;
+
+    std::cout << "q cables" << std::endl;
+    for (size_t i = 0; i < numOfquads; i++) {
+      std::cout << state.segment<3>(13 + i * 3).transpose() << std::endl;
+    }
+
+    std::cout << "w cables" << std::endl;
+    for (size_t i = 0; i < numOfquads; i++) {
+      std::cout << state.segment<3>(13 + i * 3).transpose() << std::endl;
+    }
+
+    std::cout << "robot i " << std::endl;
+    for (size_t i = 0; i < numOfquads; i++) {
+      std::cout << "q " << std::endl;
+      std::cout << state.segment<4>(13 + numOfquads * 6 + i * 7).transpose()
+                << std::endl;
+      std::cout << "w " << std::endl;
+      std::cout << state.segment<4>(13 + numOfquads * 6 + i * 7 + 4).transpose()
+                << std::endl;
+    }
+  }
 
   // fro
 };

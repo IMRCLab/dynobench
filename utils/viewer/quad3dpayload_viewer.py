@@ -291,6 +291,7 @@ class Visualizer():
                     tf.quaternion_matrix(quat_uav)))
             
             if self.QuadPayloadRobot.pType == "rigid":
+                qc = state[13+6*i: 13+6*i+3]
                 cableQuat = rn.vector_vector_rotation(np.array([0,0,1]), -1*np.array(qc))
                 rotatez = rn.rotate(cableQuat, np.array([0,0,0.5*quad.l]))
                 attpoint = payloadSt[0:3] + rn.rotate(quat_p, self.QuadPayloadRobot.attP[i]) 

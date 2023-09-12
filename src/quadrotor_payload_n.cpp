@@ -17,6 +17,7 @@ namespace dynobench {
 
 void Quad3dpayload_n_params::read_from_yaml(YAML::Node &node) {
 
+  set_from_yaml(node, VAR_WITH_NAME(J_p));
   set_from_yaml(node, VAR_WITH_NAME(num_robots));
   set_from_yaml(node, VAR_WITH_NAME(point_mass));
   set_from_yaml(node, VAR_WITH_NAME(col_size_robot));
@@ -305,6 +306,9 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
     std::vector<UAV> uavs(params.num_robots);
     // TODO: pass the parameters?
 
+
+
+
     for (size_t i = 0; i < params.num_robots; ++i) {
       uavs.at(i).pos_fr_payload =
           Eigen::Vector3d(params.attPx(i), params.attPy(i), params.attPz(i));
@@ -314,6 +318,7 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
       uavs.at(i).m = params.m(i);
     }
     payload_system = PayloadSystem(uavs);
+    payload_system.J = params.J_p.asDiagonal();
     payload_system.m_payload = params.m_payload;
   }
 

@@ -448,6 +448,7 @@ BOOST_AUTO_TEST_CASE(test_rigid_body3) {
   Eigen::VectorXd xnext(model->nx);
   Eigen::VectorXd u(model->nu);
   
+  u.setZero();
   u.segment(0, 4).setConstant(1.2);
 
   Trajectory traj;
