@@ -158,8 +158,8 @@ class Visualizer():
         # self._addQuadsPayload()
         self._setObstacles(env["environment"]["obstacles"])
         self.env = env
-        self.__setGoal()
         self.__setStart()
+        self.__setGoal()
 
     def __setGoal(self):
         self._addQuadsPayload("goal", "red")
@@ -278,21 +278,23 @@ class Visualizer():
                 tf.translation_matrix(payloadSt).dot(
                     tf.quaternion_matrix([1, 0, 0, 0])))
         else:
-            quat_p = payloadSt[3:7]
-            quat_p_rn = [quat_p[3], quat_p[0], quat_p[1], quat_p[2]]
-            
+            quat_p_inv = payloadSt[3:7]
+            quat_p = [quat_p_inv[3], quat_p_inv[0], quat_p_inv[1], quat_p_inv[2]]
             frame[prefix + self.payload.shape].set_transform(
                 tf.translation_matrix(payloadSt[0:3]).dot(
-                    tf.quaternion_matrix(quat_p_rn)))
+                    tf.quaternion_matrix(quat_p)))
 
         for i, (name, quad) in enumerate(self.quads.items()):
+            quat_uav = quad.state[3:7]
             frame[prefix + name].set_transform(
                 tf.translation_matrix(quad.state[0:3]).dot(
-                    tf.quaternion_matrix(quad.state[3:7] )))
+                    tf.quaternion_matrix(quat_uav)))
+            
             if self.QuadPayloadRobot.pType == "rigid":
-                qc = state[13+6*i: 13+6*i+3]
-                cablePos  = payloadSt[0:3] - (quad.l/2)*np.array(qc) + rn.rotate(quat_p_rn, self.QuadPayloadRobot.attP[i]) 
-                cableQuat = rn.vector_vector_rotation([0,0,-1], qc)
+                cableQuat = rn.vector_vector_rotation(np.array([0,0,1]), -1*np.array(qc))
+                rotatez = rn.rotate(cableQuat, np.array([0,0,0.5*quad.l]))
+                attpoint = payloadSt[0:3] + rn.rotate(quat_p, self.QuadPayloadRobot.attP[i]) 
+                cablePos = attpoint + rotatez
             else:
                 qc = state[6+6*i: 6+6*i+3]
                 cablePos  = payloadSt[0:3] - (quad.l/2)*np.array(qc)  
@@ -501,11 +503,11 @@ def quad3dpayload_meshcatViewer():
                 visualizer.updateVis(state, frame=frame)
         visualizer.vis.set_animation(anim)
 
-        # res = visualizer.vis.static_html()
-        # # save to a file
-        # # Path(args.output).mkdir(exist_ok=True)
-        # with open(args.output, "w") as f:
-        #     f.write(res)
+        res = visualizer.vis.static_html()
+        # save to a file
+        # Path(args.output).mkdir(exist_ok=True)
+        with open(args.output, "w") as f:
+            f.write(res)
     else: 
 
         while True:
