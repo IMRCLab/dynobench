@@ -268,7 +268,7 @@ class Controller():
             u_inp[3:6] += skew(self.attP[i])@Rp.T @ qcqcT @ u_i
 
         Bq[3:6, 3:6] = Jp - Bq[3:6, 3:6]
-        print(Bq)
+
         Nq[3:6] = Nq[3:6] - skew(wp) @Jp @ wp
 
         accFull = np.linalg.inv(Bq)@(Nq + u_inp)
@@ -436,8 +436,9 @@ class Controller():
             ppos = np.array(state[0:3])
             cffirmware.state_set_position(self.state,  k, k, pos[0], pos[1], pos[2])
             if self.payloadType == "rigid":    
-                attPoint = self.attP[i]
-                cffirmware.controller_lee_payload_set_attachement(self.leePayload, k,k, attPoint[0], attPoint[1], attPoint[2])
+                attPoint = self.attP[k]
+                print("attP from py: ", attPoint)
+                cffirmware.controller_lee_payload_set_attachement(self.leePayload, k, k, attPoint[0], attPoint[1], attPoint[2])
 
     def controllerLeePayload(self, actions_d, states_d, state, tick, my_id, compAcc):
         self.team_ids.remove(my_id)
@@ -447,7 +448,7 @@ class Controller():
             attP_res = self.attP[my_id].copy()
             self.attP = np.delete(self.attP, my_id, 0)
             self.attP = np.insert(self.attP, 0 , attP_res, axis=0)
-
+        # print(self.attP)
         self.__updateDesState(actions_d, states_d, state, compAcc)
         self.__updateState(state, my_id)
         self.__updateSensor(state,my_id)
