@@ -448,14 +448,14 @@ def quad3dpayload_meshcatViewer():
     # point1 =  [1.14314,0.118284,0.451639]
     # point2=  [1.03288,0.118285,0.451639]
 
-    point1 =  [-0.159152,-0.0469328,0.487074]
-    point2 =  [-0.164079,0.0532498,0.485482]
+    # point1 =  [-0.159152,-0.0469328,0.487074]
+    # point2 =  [-0.164079,0.0532498,0.485482]
 
-    points = np.array([point1, point2]).T
+    # points = np.array([point1, point2]).T
 
 
-    visualizer.vis["col1"].set_object(
-        g.Line(g.PointsGeometry(points), g.LineBasicMaterial()))
+    # visualizer.vis["col1"].set_object(
+    #     g.Line(g.PointsGeometry(points), g.LineBasicMaterial()))
 
     # name = input("press any key on terminal to close: ")
     # print("closing")
