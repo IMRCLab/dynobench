@@ -439,6 +439,8 @@ class Controller():
                 attPoint = self.attP[k]
                 print("attP from py: ", attPoint)
                 cffirmware.controller_lee_payload_set_attachement(self.leePayload, k, k, attPoint[0], attPoint[1], attPoint[2])
+            else:
+                cffirmware.controller_lee_payload_set_attachement(self.leePayload, k, k, 0, 0, 0)
 
     def controllerLeePayload(self, actions_d, states_d, state, tick, my_id, compAcc):
         self.team_ids.remove(my_id)
