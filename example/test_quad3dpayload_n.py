@@ -300,10 +300,12 @@ class Controller():
         ap = np.zeros(3,)
         if self.payloadType == "point":
             start_idx = 0
+            rig_idx = 0
             if not self.nocableTracking:
                 ap = self.__computeAcc(states_d, actions_d)
         elif self.payloadType == "rigid":
-            start_idx = 7
+            start_idx = 4
+            rig_idx = 3
             self.setpoint.attitudeQuaternion.x = states_d[3]
             self.setpoint.attitudeQuaternion.y = states_d[4]
             self.setpoint.attitudeQuaternion.z = states_d[5]
@@ -323,18 +325,23 @@ class Controller():
         self.setpoint.acceleration.x = states_d[start_idx+6]  # m/s^2 update this to be computed from model
         self.setpoint.acceleration.y = states_d[start_idx+7]  # m/s^2 update this to be computed from model
         self.setpoint.acceleration.z = states_d[start_idx+8] + 9.81  # m/s^2 update this to be computed from model
-        
+        print("setpoint payload pos",self.setpoint.position.x, self.setpoint.position.y, self.setpoint.position.z)
+        print("setpoint payload vel",self.setpoint.velocity.x, self.setpoint.velocity.y, self.setpoint.velocity.z)
+        print("setpoint payload acc",self.setpoint.acceleration.x, self.setpoint.acceleration.y, self.setpoint.acceleration.z)
+        print("setpoint payload quat",self.setpoint.attitudeQuaternion.x, self.setpoint.attitudeQuaternion.y, self.setpoint.attitudeQuaternion.z, self.setpoint.attitudeQuaternion.w)
+        print("setpoint payload w",self.setpoint.attitudeRate.roll, self.setpoint.attitudeRate.pitch, self.setpoint.attitudeRate.yaw)
+
         for k,i in enumerate(self.team_ids):
             action = actions_d[4*i : 4*i + 4]
             control = self.B0@action
             th = control[0]
             fu = np.array([0,0,th])
            
-            qc = states_d[start_idx+3+6+6*i: start_idx+3+6+6*i+3]
-            wc = states_d[start_idx+3+6+6*i+3: start_idx+3+6+6*i+6]
+            qc = states_d[start_idx+rig_idx+3+6+6*i: start_idx+rig_idx+3+6+6*i+3]
+            wc = states_d[start_idx+rig_idx+3+6+6*i+3: start_idx++rig_idx+3+6+6*i+6]
             qc_dot = np.cross(wc, qc)
-            q = states_d[start_idx+3+6+6*self.num_robots+7*i: start_idx+3+6+6*self.num_robots+7*i + 4]
-            w_uav = states_d[start_idx+3+6+6*self.num_robots+7*i+4: start_idx+3+6+6*self.num_robots+7*i + 7]
+            q = states_d[start_idx+rig_idx+3+6+6*self.num_robots+7*i: start_idx+rig_idx+3+6+6*self.num_robots+7*i + 4]
+            w_uav = states_d[start_idx+rig_idx+3+6+6*self.num_robots+7*i+4: start_idx+rig_idx+3+6+6*self.num_robots+7*i + 7]
 
             q_rn = [q[3], q[0], q[1], q[2]]
             xi_ddot = np.zeros(3,)
@@ -369,6 +376,7 @@ class Controller():
         wc = state[cable_start_idx+6*i+3: cable_start_idx+6*i + 6]
         quat = state[cable_start_idx+6*self.num_robots+7*i : cable_start_idx+6*self.num_robots+7*i+4]        
         w = state[cable_start_idx+6*self.num_robots+7*i +4 : cable_start_idx+6*self.num_robots+7*i+7]        
+
         # TODO: dont forget to add the attachment points for the positions
         qc_dot = np.cross(wc,qc)
         pos = np.array(state[0:3]) - l*qc
@@ -391,6 +399,7 @@ class Controller():
         self.state.payload_pos.x, self.state.payload_pos.y, self.state.payload_pos.z,
         self.state.payload_vel.x, self.state.payload_vel.y, self.state.payload_vel.z,
         self.state.position.x, self.state.position.y, self.state.position.z, 
+        #  self.state.velocity.x, self.state.velocity.y, self.state.velocity.z, 
         )
         print(St)
 
@@ -433,17 +442,22 @@ class Controller():
         self.state.attitudeQuaternion.y = quat[1]
         self.state.attitudeQuaternion.z = quat[2]
         self.state.attitudeQuaternion.w = quat[3]
+        print("UAV: ", i)
+        print("attpoint: ",self.attP[i])
+        print("state uav pos",self.state.position.x, self.state.position.y, self.state.position.z)
+        print("state uav vel",self.state.velocity.x, self.state.velocity.y, self.state.velocity.z)
+        print("state payload pos",self.state.payload_pos.x, self.state.payload_pos.y, self.state.payload_pos.z)
+        print("state payload vel",self.state.payload_vel.x, self.state.payload_vel.y, self.state.payload_vel.z)
+        print("state payload quat",self.state.attitudeQuaternion.x, self.state.attitudeQuaternion.y, self.state.attitudeQuaternion.z, self.state.attitudeQuaternion.w)
+        print("state payload w",self.state.payload_omega.x, self.state.payload_omega.y, self.state.payload_omega.z)
+
 
     def __updateNeighbors(self, state):
         for k,i in enumerate(self.team_ids):
             pos, _, _ , _ = self.__getUAVSt(state, i)
-            qc = np.array(state[6+6*i:6+6*i+3])
-            if self.payloadType == "rigid":
-                qc = np.array(state[13+6*i:13+6*i+3])
-            ppos = np.array(state[0:3])
             cffirmware.state_set_position(self.state, k, k, pos[0], pos[1], pos[2])
             if self.payloadType == "rigid":    
-                attPoint = self.attP[k]
+                attPoint = self.attP[i]
                 cffirmware.controller_lee_payload_set_attachement(self.leePayload, k, k, attPoint[0], attPoint[1], attPoint[2])
             else:
                 cffirmware.controller_lee_payload_set_attachement(self.leePayload, k, k, 0, 0, 0)
@@ -451,19 +465,22 @@ class Controller():
     def controllerLeePayload(self, actions_d, states_d, state, tick, my_id, compAcc):
         self.team_ids.remove(my_id)
         self.team_ids.insert(0, my_id)
-        if self.payloadType == "rigid":
-            # sort the attachment points
-            attP_res = self.attP[my_id].copy()
-            self.attP = np.delete(self.attP, my_id, 0)
-            self.attP = np.insert(self.attP, 0 , attP_res, axis=0)
+        # if self.payloadType == "rigid":
+        #     # sort the attachment points
+        #     attP_res = self.attP[my_id].copy()
+        #     self.attP = np.delete(self.attP, my_id, 0)
+        #     self.attP = np.insert(self.attP, 0 , attP_res, axis=0)
+        print("attP in main: \n", self.attP)
         self.__updateDesState(actions_d, states_d, state, compAcc)
         self.__updateState(state, my_id)
         self.__updateSensor(state,my_id)
         self.__updateNeighbors(state)
         cffirmware.controllerLeePayload(self.leePayload, self.control, self.setpoint, self.sensors, self.state, tick)
         control = np.array([self.leePayload.thrustSI, self.control.torque[0], self.control.torque[1], self.control.torque[2]])
+        # print(control)
         u = self.B0_inv@control
-        u = np.clip(u, 0., 1.4)
+        print("u:", u, my_id)
+        # u = np.clip(u, 0., 1.4)
         return u.tolist()
 
 
@@ -559,10 +576,25 @@ def main():
             gains = [(10, 8, 0), (8, 6, 1.5), (0.008,0.0013, 0.0), (1000,1000,1000), (1000)]
         elif payloadType == "rigid":
             ref_start_idx = 7
-            # add the payload angular velocity gains
-            gains = [(10.0, 8, 0), (8, 4, 1.5), (0.008,0.0013, 0.0), (1000,1000,1000), (1000), (0.02,0.01)]
+            # add the payload angular velocity gains 
+
+            gains = [(10, 8, 0.0), (8, 3, 0.0), (0.008,0.0013, 0.0), (1000,1000,1000), (1000), (0.0002,0.0001)]
 
         refArray = np.array(refstate)
+        # refArray = np.vstack((refArray,refArray))
+        # print(refArray.shape)
+        # for hovering uncomment this 
+        # rate = 0.001
+        # k = 1
+        # for i in range(refArray.shape[0]):
+        #     refArray[i,1] -= k * rate
+        #     refArray[i,0] += k * rate
+        #     refArray[i,2] += k * rate
+        #     k += 1
+
+
+
+
         v = np.array(refArray[:,ref_start_idx:ref_start_idx+3])
         a = np.zeros_like(v)
         refArray = np.insert(refArray, ref_start_idx+3,  a[:,0], axis=1)
@@ -585,15 +617,18 @@ def main():
             payloadStSize = 13            
 
         states = np.zeros((len(refstate), payloadStSize+6*num_robots+7*num_robots))
+        # states =np.vstack((states, states))
         states[0] = initstate
         states_d = refArray  
         actions_d = np.array(refactions)  
+        # actions_d = np.vstack((actions_d, actions_d))
 
         print('Simulating...')
         # append the initial state
         robot.appSt.append(initstate.tolist())
         print("initState :",robot.appSt[0])
-        for k in range(len(refstate)-1):
+        # for k in range(len(refstate)-1):
+        for k in range(300):
             # states_d[k] = [ref for subref in reference_traj_circle(t, angular_vel, np.array(qcwc), num_robots, h=h, r=r) for ref in subref]
             u = []
             for r_idx, ctrl in robot.controller.items():
@@ -604,10 +639,11 @@ def main():
             u = np.array(flatten_list(u))
             # exit()
             # add some noise to the actuation
-            u += np.random.normal(0.0, 0.025, len(u))
-            u = np.clip(u, 0, 1.4)
-            robot.step(states[k+1], states[k], u)
-            # time.sleep(0.1)
+            # u += np.random.normal(0.0, 0.025, len(u))
+            # u = np.clip(u, 0, 1.4)
+            # exit()
+            robot.step(states[k+1], states[k],u)
+            # time.sleep(1)
         print("Done Simulation")
         
         output = {}
