@@ -13,7 +13,9 @@ Eigen::Vector4d intergrate_quat_formatC(const Eigen::Vector4d &__quat_p,
                                         const Eigen::Vector3d &wp, double dt) {
 
   Eigen::Vector4d quat_p(__quat_p(1), __quat_p(2), __quat_p(3), __quat_p(0));
-  quat_p.normalize();
+
+  CHECK_LEQ(std::abs(quat_p.norm() - 1.), 1e-6, "");
+
   Eigen::Vector4d __out, __out2;
   Eigen::Vector4d deltaQ;
   __get_quat_from_ang_vel_time(wp * dt, deltaQ, nullptr);
@@ -25,9 +27,11 @@ Eigen::Vector4d intergrate_quat_formatC(const Eigen::Vector4d &__quat_p,
 Eigen::Vector3d rotate_format_C(const Eigen::Vector4d &quat,
                                 const Eigen::Vector3d &v) {
 
-  Eigen::Vector4d q = quat.normalized();
+  // Eigen::Vector4d q = quat.normalized();
+
+  CHECK_LEQ(std::abs(quat.norm() - 1.), 1e-6, "");
   Eigen::Matrix3d R =
-      Eigen::Quaterniond(q(0), q(1), q(2), q(3)).toRotationMatrix();
+      Eigen::Quaterniond(quat(0), quat(1), quat(2), quat(3)).toRotationMatrix();
   return R * v;
 }
 
@@ -35,6 +39,9 @@ Eigen::Vector3d rotate_format_C(const Eigen::Vector4d &quat,
 // something like:
 Eigen::Matrix3d to_matrix_formatC(const Eigen::Vector4d &vec) {
   // TODO: check the order of the quaternion!!
+
+  CHECK_LEQ(std::abs(vec.norm() - 1.), 1e-6, "");
+
   return Eigen::Quaterniond(vec(0), vec(1), vec(2), vec(3)).toRotationMatrix();
 }
 
@@ -157,6 +164,9 @@ void PayloadSystem::getBq(Eigen::Ref<Eigen::MatrixXd> Bq,
     double l = uavs.at(ii).l_c;
 
     Eigen::Vector3d qi = state.segment(k, 3);
+
+    CHECK_LEQ(std::abs(qi.norm() - 1.), 1e-4, "");
+
     k += 3;
 
     Bq.block<3, 3>(i, 0) =
@@ -236,7 +246,7 @@ void PayloadSystem::getNq(Eigen::Ref<Eigen::VectorXd> Nq,
   }
 
   if (!pointmass) {
-    // Assuming J is a member variable representing inertia tensor
+    // Assuming J is a member variable representing inertia tnsor
     Nq.segment(3, 3) -= skew(wl) * J * wl;
   }
 }
@@ -316,7 +326,8 @@ void PayloadSystem::getPayloadwCablesAcceleration(Vref acc, Vcref x, Vcref u) {
   getuinp(u_inp, x, u);
 
   // Bq.inverse() * (Nq + u_inp)
-  acc.segment(0, payload_w_cables_nv) = Bq.lu().solve(Nq + u_inp );
+  // acc.segment(0, payload_w_cables_nv) = Bq.lu().solve(Nq + u_inp);
+  acc.segment(0, payload_w_cables_nv) = Bq.inverse() * (Nq + u_inp);
   acc.segment(0, 3) -= Eigen::Vector3d(
       0, 0, 9.81); // TODO: ask Khaled -- are you sure this is correct?
 
@@ -376,6 +387,7 @@ void PayloadSystem::stateEvolution(
     Eigen::Vector3d qdot =
         wi.cross(qi); // qdot using Eigen's cross product method
     next_state.segment(k, 3) = qdot * dt + qi;
+    next_state.segment(k, 3).normalize();
 
     k += 3;
     j += 3;
@@ -395,6 +407,9 @@ void PayloadSystem::stateEvolution(
     get_state_uav_i(ii, next_state).segment(0, 4) = qNext;
     get_state_uav_i(ii, next_state).segment(4, 3) = wNext;
   }
+
+  // std::cout << "diference in coltrans " << std::endl;
+  // std::cout << next_state - state << std::endl;
 }
 
 // fro
@@ -406,11 +421,17 @@ void state_dynobench2coltrans(Eigen::Ref<Eigen::VectorXd> out,
   out = in;
 
   // flip quaternion of payload
-  int base = 6;
-  out(base) = in(base + 3);
-  out(base + 1) = in(base);
-  out(base + 2) = in(base + 1);
-  out(base + 3) = in(base + 2);
+  {
+    int base_dyno = 3;
+    int base_coltrans = 6;
+    out(base_coltrans) = in(base_dyno + 3);
+    out(base_coltrans + 1) = in(base_dyno);
+    out(base_coltrans + 2) = in(base_dyno + 1);
+    out(base_coltrans + 3) = in(base_dyno + 2);
+  }
+
+  // copy the velocities
+  { out.segment(3, 3) = in.segment(7, 3); }
 
   // from [ q, w, q, w, ...] to [ (q,q,...) , (w,...) ]
   for (size_t i = 0; i < num_uavs; i++) {
@@ -418,6 +439,7 @@ void state_dynobench2coltrans(Eigen::Ref<Eigen::VectorXd> out,
     out.segment(13 + 3 * num_uavs + i * 3, 3) = in.segment(13 + i * 6 + 3, 3);
   }
 
+  // [ (q,w) , (q,w) ... ] in both
   for (size_t i = 0; i < num_uavs; i++) {
     // flip the quaternion
     int base = 13 + num_uavs * 6 + 7 * i;
@@ -434,11 +456,16 @@ void state_coltrans2dynobench(Eigen::Ref<Eigen::VectorXd> out,
 
   out = in;
   // flip quaternion of payload
-  int base = 6;
-  out(base) = in(base + 1);
-  out(base + 1) = in(base + 2);
-  out(base + 2) = in(base + 3);
-  out(base + 3) = in(base);
+  {
+    int base_dyno = 3;
+    int base_coltrans = 6;
+    out(base_dyno) = in(base_coltrans + 1);
+    out(base_dyno + 1) = in(base_coltrans + 2);
+    out(base_dyno + 2) = in(base_coltrans + 3);
+    out(base_dyno + 3) = in(base_coltrans);
+  }
+
+  { out.segment(7, 3) = in.segment(3, 3); }
 
   // from [ (q,q,...) , (w,...) ] to [ q, w, q, w, ...]
   for (size_t i = 0; i < num_uavs; i++) {

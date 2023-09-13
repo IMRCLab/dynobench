@@ -86,17 +86,8 @@ BOOST_AUTO_TEST_CASE(t_big_mess) {
   Matrix payload_state = readCSV(base_path_csv "payload.csv");
 
   int time_step = 300;
-  // load the state
-  // std::vector<UavModel> uavs(2);
 
-  std::vector<Eigen::VectorXd> uav_states;
-  std::vector<Eigen::VectorXd> uav_controls;
-
-  uav_states.push_back(from_stdvect_to_eigen(cfs1.at(time_step)));
-  uav_states.push_back(from_stdvect_to_eigen(cfs2.at(time_step)));
-
-  uav_controls.push_back(from_stdvect_to_eigen(actions1.at(time_step)));
-  uav_controls.push_back(from_stdvect_to_eigen(actions2.at(time_step)));
+  std::vector<int> time_steps = {300, 310};
 
   std::vector<UAV> uavs(2);
   uavs.at(0).pos_fr_payload = Eigen::Vector3d(0, .3, 0);
@@ -104,143 +95,158 @@ BOOST_AUTO_TEST_CASE(t_big_mess) {
 
   PayloadSystem payload(uavs);
 
-  Eigen::VectorXd u(8);
+  for (size_t t = 0; t < time_steps.size(); t++) {
+    time_step = time_steps.at(t);
 
-  for (size_t i = 0; i < payload.numOfquads; i++) {
-    u.segment(i * 4, 4) = payload.uavs.at(i).ctrAll * uav_controls.at(i);
+    // load the state
+    // std::vector<UavModel> uavs(2);
+
+    std::vector<Eigen::VectorXd> uav_states;
+    std::vector<Eigen::VectorXd> uav_controls;
+
+    uav_states.push_back(from_stdvect_to_eigen(cfs1.at(time_step)));
+    uav_states.push_back(from_stdvect_to_eigen(cfs2.at(time_step)));
+
+    uav_controls.push_back(from_stdvect_to_eigen(actions1.at(time_step)));
+    uav_controls.push_back(from_stdvect_to_eigen(actions2.at(time_step)));
+
+    Eigen::VectorXd u(8);
+
+    for (size_t i = 0; i < payload.numOfquads; i++) {
+      u.segment(i * 4, 4) = payload.uavs.at(i).ctrAll * uav_controls.at(i);
+    }
+
+    Eigen::VectorXd next_state(payload.nx);
+    next_state.setZero();
+
+    Eigen::VectorXd state(payload.nx);
+    state.setZero();
+
+    // state.segment(0, 13 + 2 * 6) =
+    //     from_stdvect_to_eigen(payload_state.at(time_step));
+    //
+    // payload.get_state_uav_i(0, state).segment(0, 7) =
+    //     uav_states.at(0).segment(6, 7);
+    //
+    // payload.get_state_uav_i(1, state).segment(0, 7) =
+    //     uav_states.at(1).segment(6, 7);
+
+    create_state_from_files(
+        state, from_stdvect_to_eigen(payload_state.at(time_step)), uav_states);
+
+    // sanity check
+    {
+      Eigen::VectorXd state_dyno(payload.nx);
+      Eigen::VectorXd state_col_v2(payload.nx);
+      state_coltrans2dynobench(state_dyno, state, payload.numOfquads);
+      state_dynobench2coltrans(state_col_v2, state_dyno, payload.numOfquads);
+      CHECK_LEQ((state - state_col_v2).norm(), 1e-12, "");
+    }
+    double dt = 1e-3;
+
+    payload.stateEvolution(next_state, state, u, dt);
+
+    // payload.stateEvolution(ctrlInputs, uavs, uavs_params);
+    Eigen::VectorXd payload_state_next =
+        from_stdvect_to_eigen(payload_state.at(time_step + 1));
+
+    std::cout
+        << "difference against next state Payload w cables -- this should "
+           "be zero!!"
+        << std::endl;
+    std::cout << (next_state.head(payload.payload_w_cables_nx) -
+                  payload_state_next)
+                     .transpose()
+              << std::endl;
+
+    std::cout
+        << "pos  diff: "
+        << (next_state.segment<3>(0) - payload_state_next.segment<3>(0)).norm()
+        << std::endl;
+    std::cout
+        << "vel  diff: "
+        << (next_state.segment<3>(3) - payload_state_next.segment<3>(3)).norm()
+        << std::endl;
+
+    std::cout << "quat diff: "
+              << (next_state.segment<4>(6) -
+                  payload_state_next.segment<4>(6).normalized())
+                     .norm()
+              << std::endl;
+
+    std::cout << "dif is " << std::endl;
+    std::cout << next_state.segment<4>(6) - payload_state_next.segment<4>(6)
+              << std::endl;
+
+    std::cout << "w    diff: "
+              << (next_state.segment<3>(10) - payload_state_next.segment<3>(10))
+                     .norm()
+              << std::endl;
+
+    std::cout << "other    diff: "
+              << (next_state.segment(13, 3) - payload_state_next.segment(13, 3))
+                     .norm()
+              << std::endl;
+
+    std::cout << "other    diff: "
+              << (next_state.segment(16, 3) - payload_state_next.segment(16, 3))
+                     .norm()
+              << std::endl;
+
+    std::cout << "other    diff: "
+              << (next_state.segment(19, 3) - payload_state_next.segment(19, 3))
+                     .norm()
+              << std::endl;
+
+    std::cout << "other    diff: "
+              << (next_state.segment(22, 3) - payload_state_next.segment(22, 3))
+                     .norm()
+              << std::endl;
+
+    std::cout << "lets compare uav 1" << std::endl;
+    Eigen::VectorXd next1 = from_stdvect_to_eigen(cfs1.at(time_step + 1));
+    Eigen::VectorXd next2 = from_stdvect_to_eigen(cfs2.at(time_step + 1));
+
+    std::cout << "uav 1 " << std::endl;
+    std::cout << "quat "
+              << (next1.segment(6, 4) -
+                  payload.get_state_uav_i(0, next_state).segment(0, 4))
+                     .norm()
+              << std::endl;
+
+    std::cout << "w "
+              << (next1.segment(10, 3) -
+                  payload.get_state_uav_i(0, next_state).segment(4, 3))
+                     .norm()
+              << std::endl;
+
+    std::cout << "uav 2 " << std::endl;
+    std::cout << "quat "
+              << (next2.segment(6, 4) -
+                  payload.get_state_uav_i(1, next_state).segment(0, 4))
+                     .norm()
+              << std::endl;
+
+    std::cout << "w "
+              << (next2.segment(10, 3) -
+                  payload.get_state_uav_i(1, next_state).segment(4, 3))
+                     .norm()
+              << std::endl;
+
+    CHECK_LEQ(
+        (next_state.head(payload.payload_w_cables_nx) - payload_state_next)
+            .norm(),
+        1e-12, AT);
+
+    CHECK_LEQ((next1.segment(6, 7) -
+               payload.get_state_uav_i(0, next_state).segment(0, 7))
+                  .norm(),
+              1e-12, "");
+    CHECK_LEQ((next2.segment(6, 7) -
+               payload.get_state_uav_i(1, next_state).segment(0, 7))
+                  .norm(),
+              1e-12, "");
   }
-
-  Eigen::VectorXd next_state(payload.nx);
-  next_state.setZero();
-
-  Eigen::VectorXd state(payload.nx);
-  state.setZero();
-
-  // state.segment(0, 13 + 2 * 6) =
-  //     from_stdvect_to_eigen(payload_state.at(time_step));
-  //
-  // payload.get_state_uav_i(0, state).segment(0, 7) =
-  //     uav_states.at(0).segment(6, 7);
-  //
-  // payload.get_state_uav_i(1, state).segment(0, 7) =
-  //     uav_states.at(1).segment(6, 7);
-
-  create_state_from_files(
-      state, from_stdvect_to_eigen(payload_state.at(time_step)), uav_states);
-
-  // sanity check
-  {
-    Eigen::VectorXd state_dyno(payload.nx);
-    Eigen::VectorXd state_col_v2(payload.nx);
-    state_coltrans2dynobench(state_dyno, state, payload.numOfquads);
-    state_dynobench2coltrans(state_col_v2, state_dyno, payload.numOfquads);
-    CHECK_LEQ((state - state_col_v2).norm(), 1e-12, "");
-  }
-  double dt = 1e-3;
-
-  payload.stateEvolution(next_state, state, u, dt);
-
-  // payload.stateEvolution(ctrlInputs, uavs, uavs_params);
-  Eigen::VectorXd payload_state_next =
-      from_stdvect_to_eigen(payload_state.at(time_step + 1));
-
-
-  std::cout << "difference against next state Payload w cables -- this should "
-               "be zero!!"
-            << std::endl;
-  std::cout << (next_state.head(payload.payload_w_cables_nx) -
-                payload_state_next)
-                   .transpose()
-            << std::endl;
-
-  std::cout
-      << "pos  diff: "
-      << (next_state.segment<3>(0) - payload_state_next.segment<3>(0)).norm()
-      << std::endl;
-  std::cout
-      << "vel  diff: "
-      << (next_state.segment<3>(3) - payload_state_next.segment<3>(3)).norm()
-      << std::endl;
-
-  std::cout << "quat diff: "
-            << (next_state.segment<4>(6) -
-                payload_state_next.segment<4>(6).normalized())
-                   .norm()
-            << std::endl;
-
-  std::cout << "dif is " << std::endl;
-  std::cout << next_state.segment<4>(6) - payload_state_next.segment<4>(6)
-            << std::endl;
-
-  std::cout
-      << "w    diff: "
-      << (next_state.segment<3>(10) - payload_state_next.segment<3>(10)).norm()
-      << std::endl;
-
-  std::cout
-      << "other    diff: "
-      << (next_state.segment(13, 3) - payload_state_next.segment(13, 3)).norm()
-      << std::endl;
-
-  std::cout
-      << "other    diff: "
-      << (next_state.segment(16, 3) - payload_state_next.segment(16, 3)).norm()
-      << std::endl;
-
-  std::cout
-      << "other    diff: "
-      << (next_state.segment(19, 3) - payload_state_next.segment(19, 3)).norm()
-      << std::endl;
-
-  std::cout
-      << "other    diff: "
-      << (next_state.segment(22, 3) - payload_state_next.segment(22, 3)).norm()
-      << std::endl;
-
-  std::cout << "lets compare uav 1" << std::endl;
-  Eigen::VectorXd next1 = from_stdvect_to_eigen(cfs1.at(time_step + 1));
-  Eigen::VectorXd next2 = from_stdvect_to_eigen(cfs2.at(time_step + 1));
-
-
-  std::cout << "uav 1 " << std::endl;
-  std::cout << "quat "
-            << (next1.segment(6, 4) -
-                payload.get_state_uav_i(0, next_state).segment(0, 4))
-                   .norm()
-            << std::endl;
-
-  std::cout << "w "
-            << (next1.segment(10, 3) -
-                payload.get_state_uav_i(0, next_state).segment(4, 3))
-                   .norm()
-            << std::endl;
-
-  std::cout << "uav 2 " << std::endl;
-  std::cout << "quat "
-            << (next2.segment(6, 4) -
-                payload.get_state_uav_i(1, next_state).segment(0, 4))
-                   .norm()
-            << std::endl;
-
-  std::cout << "w "
-            << (next2.segment(10, 3) -
-                payload.get_state_uav_i(1, next_state).segment(4, 3))
-                   .norm()
-            << std::endl;
-
-
-  CHECK_LEQ((next_state.head(payload.payload_w_cables_nx) - payload_state_next)
-                .norm(),
-            1e-12, AT);
-
-  CHECK_LEQ((next1.segment(6, 7) -
-             payload.get_state_uav_i(0, next_state).segment(0, 7))
-                .norm(),
-            1e-12, "");
-  CHECK_LEQ((next2.segment(6, 7) -
-             payload.get_state_uav_i(1, next_state).segment(0, 7))
-                .norm(),
-            1e-12, "");
 
   // lets compare!
   //

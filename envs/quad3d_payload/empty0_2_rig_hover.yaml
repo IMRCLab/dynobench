@@ -5,7 +5,7 @@ environment:
   max: [-1000,1000]
   obstacles: []
 robots:
-  - type: rigid
+  - type: rigid_2
     l: [0.5, 0.5] # This must be a list
     quadsNum: 2 # number of robots  
     attP: [[0,0.3,0], [0,-0.3,0]]

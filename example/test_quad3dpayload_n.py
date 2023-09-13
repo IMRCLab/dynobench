@@ -86,6 +86,7 @@ class Controller():
         kth_p, kth_d, kth_i = gains[2]
         kp_limit, kd_limit, ki_limit =  gains[3]
         lambdaa = gains[4]
+        self.Ji = np.diag(robotparams["Ji"]) 
         self.leePayload = cffirmware.controllerLeePayload_t()
         cffirmware.controllerLeePayloadInit(self.leePayload)
         self.team_state = dict()
@@ -94,8 +95,13 @@ class Controller():
         self.l = robotparams['l']
         self.leePayload.en_qdidot = 1 # 0: disable, 1: provide references
         self.leePayload.mass = self.mi
-        self.leePayload.en_accrb = 0                                
-        self.leePayload.gen_hp = 1 # TODO: don't forget to change this after updating the firmware for rigid case
+        if self.payloadType == "point":
+            self.leePayload.en_accrb = 0  #TODO: don't forget to change this for the rigid case                               
+            self.leePayload.gen_hp = 1 # TODO: don't forget to change this after updating the firmware for rigid case
+        elif self.payloadType == "rigid":
+            self.Jp = robotparams["Jp"]
+            self.leePayload.en_accrb = 1  #TODO: don't forget to change this for the rigid case                               
+            self.leePayload.gen_hp = 1 # TODO: don't forget to change this after updating the firmware for rigid case, I don't think we use this anymore
         self.leePayload.formation_control = 2 # 0: disable, 1:set mu_des_prev (regularization), 3: planned formations (qi refs)
         self.leePayload.lambda_svm = 1000
         self.leePayload.radius = 0.15
@@ -185,37 +191,128 @@ class Controller():
         return ap
 
 
-    def __comuteAngAcc(self, state, actions, ap, i):
-        action = actions[4*i : 4*i + 4]
-        q = state[9+6*self.num_robots+7*i: 9+6*self.num_robots+7*i + 4]
-        qc = state[9+6*i: 9+6*i+3]
-        wc = state[9+6*i+3: 9+6*i+6]
-        q_rn = [q[3], q[0], q[1], q[2]]
-        control = self.B0@action
-        th = control[0]
-        fu = np.array([0,0,th])
-        apgrav = ap + np.array([0,0,9.81])
-        u_i = rn.rotate(q_rn, fu)
-        wcdot = 1/self.l[i] * np.cross(qc, apgrav) - (1/(self.mi*self.l[i])) * np.cross(qc, u_i) 
+    def __comuteAngAcc(self, state, actions, ap, i, wpdot=None):
+        if self.payloadType == "point":        
+            action = actions[4*i : 4*i + 4]
+            q = state[9+6*self.num_robots+7*i: 9+6*self.num_robots+7*i + 4]
+            qc = state[9+6*i: 9+6*i+3]
+            wc = state[9+6*i+3: 9+6*i+6]
+            q_rn = [q[3], q[0], q[1], q[2]]
+            control = self.B0@action
+            th = control[0]
+            fu = np.array([0,0,th])
+            apgrav = ap + np.array([0,0,9.81])
+            u_i = rn.rotate(q_rn, fu)
+            wcdot = 1/self.l[i] * np.cross(qc, apgrav) - (1/(self.mi*self.l[i])) * np.cross(qc, u_i) 
+        elif self.payloadType == "rigid":
+            l = self.l[i]
+            action = actions[4*i : 4*i + 4]
+            # cable states
+            qc = np.array(state[16+6*i: 16+6*i+3])
+            wc = np.array(state[16+6*i+3: 16+6*i+6])
+            qcqcT = qc.reshape(3,1)@qc.reshape(1,3)
+            # uav quat
+            q_ = state[16+6*self.num_robots+7*i: 16+6*self.num_robots+7*i + 4]
+            q = np.array([q_[3], q_[0], q_[1], q_[2]])
+            # payload quat and omega
+            qp_ = state[3:7]
+            qp = np.array([qp_[3], qp_[0], qp_[1], qp_[2]])
+            Rp = rn.to_matrix(qp)
+            wp = np.array(state[13:16])
+            apgrav = ap + np.array([0,0,9.81]) - Rp @ skew(self.attP[i]) @ wpdot + Rp @ skew(wp) @ skew(wp) @ self.attP[i]
+            control = self.B0@action
+            th = control[0]
+            fu = np.array([0,0,th])
+            u_i = rn.rotate(qp,fu)
+            wcdot = 1/self.l[i] * np.cross(qc, apgrav) - (1/(self.mi*self.l[i])) * np.cross(qc, u_i) 
+
         return wcdot
+
+    def __computeFullAcc(self, state, actions):
+    #TODO: compute ap with Bq.inv()*(Nq + u_inp) from the ref actions
+        Bq = np.zeros((6,6))
+        Nq = np.zeros(6,)
+        u_inp = np.zeros(6,)
+        Bq[0:3, 0:3] = self.Mq 
+
+        m = self.mi
+        Jp = np.diag(self.Jp)
+        for k,i in enumerate(self.team_ids):
+            l = self.l[i]
+            action = actions[4*i : 4*i + 4]
+            # cable states
+            qc = np.array(state[16+6*i: 16+6*i+3])
+            wc = np.array(state[16+6*i+3: 16+6*i+6])
+            qcqcT = qc.reshape(3,1)@qc.reshape(1,3)
+            # uav quat
+            q_ = state[16+6*self.num_robots+7*i: 16+6*self.num_robots+7*i + 4]
+            q = np.array([q_[3], q_[0], q_[1], q_[2]])
+            # payload quat and omega
+            qp_ = state[3:7]
+            qp = np.array([qp_[3], qp_[0], qp_[1], qp_[2]])
+            Rp = rn.to_matrix(qp)
+            wp = np.array(state[13:16])
+
+            control = self.B0@action
+            th = control[0]
+            fu = np.array([0,0,th])
+            u_i = rn.rotate(qp,fu)
+            Bq[0:3,3:6]  += -m * qcqcT @ Rp @ skew(self.attP[i])
+            Bq[3:6, 0:3] += m * skew(self.attP[i]) @ Rp.T @ qcqcT
+            Bq[3:6, 3:6]   +=  m * skew(self.attP[i]) @ Rp.T @ qcqcT @ Rp @ skew(self.attP[i])
+
+            Nq[0:3]   += (-m*l*np.dot(wc,wc)*qc - m * qcqcT @ Rp @skew(wp) @skew(wp) @ self.attP[i])
+            Nq[3:6]   += skew(self.attP[i]) @ Rp.T @ ((-m *l * np.dot(wc, wc) * qc) - (m * qcqcT @ Rp @ skew(wp) @skew(wp) @ self.attP[i]))
+
+            u_inp[0:3] += u_i
+            u_inp[3:6] += skew(self.attP[i])@Rp.T @ qcqcT @ u_i
+
+        Bq[3:6, 3:6] = Jp - Bq[3:6, 3:6]
+
+        Nq[3:6] = Nq[3:6] - skew(wp) @Jp @ wp
+
+        accFull = np.linalg.inv(Bq)@(Nq + u_inp)
+        acc = np.copy(accFull[0:3])
+        wpdot = np.copy(accFull[3:6])
+        acc -= np.array([0,0,9.81])
+        print(accFull)
+        return acc, wpdot
+    
+
+    def __computeUAVwd(self,states, actions, i):
+        q = states[16+6*self.num_robots+7*i: 16+6*self.num_robots+7*i + 4]
+        q_rn = [q[3], q[0], q[1], q[2]]
+        w = states[16+6*self.num_robots+7*i + 4: 16+6*self.num_robots+7*i + 7]
+
+        control = self.B0 @ actions[4*i : 4*i+4]
+        tau = control[1::]
+        w_dot = np.linalg.inv(self.Ji) @ (tau - skew(w) @ self.Ji @ w)
+        return w_dot
 
     def __updateDesState(self, actions_d, states_d, state, compAcc):
         self.setpoint.position.x = states_d[0]  # m
         self.setpoint.position.y = states_d[1]  # m
         self.setpoint.position.z = states_d[2]  # m
-        start_idx = 3
-        if self.payloadType == "rigid":
+        ap = np.zeros(3,)
+        if self.payloadType == "point":
+            start_idx = 3
+            ap = self.__computeAcc(states_d, actions_d)
+        elif self.payloadType == "rigid":
+            start_idx = 7
             self.setpoint.attitudeQuaternion.x = states_d[3]
             self.setpoint.attitudeQuaternion.y = states_d[4]
             self.setpoint.attitudeQuaternion.z = states_d[5]
             self.setpoint.attitudeQuaternion.w = states_d[6]
-            start_idx = 7
+            self.setpoint.attitudeRate.roll  = states_d[13]
+            self.setpoint.attitudeRate.pitch = states_d[14]
+            self.setpoint.attitudeRate.yaw   = states_d[15]
+            ap, wpdot = self.__computeFullAcc(states_d, actions_d)
+        if compAcc:
+            states_d[start_idx+3 : start_idx+6] = ap  
         self.setpoint.velocity.x = states_d[start_idx]  # m/s
         self.setpoint.velocity.y = states_d[start_idx+1]  # m/s
         self.setpoint.velocity.z = states_d[start_idx+2]  # m/s
-        ap = self.__computeAcc(states_d, actions_d)
-        if compAcc:
-            states_d[start_idx+3:start_idx+6] = ap  
+        
         self.setpoint.acceleration.x = states_d[start_idx+3]  # m/s^2 update this to be computed from model
         self.setpoint.acceleration.y = states_d[start_idx+4]  # m/s^2 update this to be computed from model
         self.setpoint.acceleration.z = states_d[start_idx+5] + 9.81  # m/s^2 update this to be computed from model
@@ -226,16 +323,29 @@ class Controller():
             th = control[0]
             fu = np.array([0,0,th])
            
-            qc = states_d[start_idx+6+6*i: start_idx+6+6*i+3]
-            wc = states_d[start_idx+6+6*i+3: start_idx+6+6*i+6]
+            qc = states_d[start_idx+3+6+6*i: start_idx+3+6+6*i+3]
+            wc = states_d[start_idx+3+6+6*i+3: start_idx+3+6+6*i+6]
             qc_dot = np.cross(wc, qc)
-            q = states_d[start_idx+6+6*self.num_robots+7*i: start_idx+6+6*self.num_robots+7*i + 4]
+            q = states_d[start_idx+3+6+6*self.num_robots+7*i: start_idx+3+6+6*self.num_robots+7*i + 4]
+            w_uav = states_d[start_idx+3+6+6*self.num_robots+7*i+4: start_idx+3+6+6*self.num_robots+7*i + 7]
+
             q_rn = [q[3], q[0], q[1], q[2]]
-            wcdot = self.__comuteAngAcc(states_d, actions_d, ap, i)
-            qc_ddot = np.cross(wcdot, qc) + np.cross(wc, qc_dot)
-            x_i_ddot = ap - self.l[i]*qc_ddot
+            xi_ddot = np.zeros(3,)
+            if self.payloadType == "point":
+                wcdot = self.__comuteAngAcc(states_d, actions_d, ap, i)
+                qc_ddot = np.cross(wcdot, qc) + np.cross(wc, qc_dot)
+                x_i_ddot = ap - self.l[i]*qc_ddot
+            elif self.payloadType == "rigid":
+                wcdot = self.__comuteAngAcc(states_d, actions_d, ap, i, wpdot=wpdot)        
+                qc_ddot = np.cross(wcdot, qc) + np.cross(wc, qc_dot)
+                wdot_uav = self.__computeUAVwd(states_d, actions_d, i)        
+                Ru = rn.to_matrix(q_rn)
+                x_i_ddot = ap - self.l[i]*qc_ddot +  Ru@ w_uav @ w_uav + Ru @ wdot_uav
+
+            
             grav = np.array([0,0,9.81])
             ref =  self.mi*(x_i_ddot + grav) - rn.rotate(q_rn, fu)
+            
             tension = np.linalg.norm(ref)
             mu_planned = -tension * qc
             cffirmware.set_setpoint_qi_ref(self.setpoint, k, 0,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2]) 
@@ -284,8 +394,10 @@ class Controller():
             self.state.payload_quat.y = state[4]
             self.state.payload_quat.z = state[5]
             self.state.payload_quat.w = state[6]
-            rpy_payload = rn.to_euler([state[6], state[3], state[4], state[5]],convention='xyz')
             start_idx = 7
+            self.state.payload_omega.x = state[start_idx+3]
+            self.state.payload_omega.y = state[start_idx+4]
+            self.state.payload_omega.z = state[start_idx+5]
         else: 
             self.state.payload_quat.x = np.nan
             self.state.payload_quat.y = np.nan
@@ -322,16 +434,21 @@ class Controller():
             if self.payloadType == "rigid":
                 qc = np.array(state[13+6*i:13+6*i+3])
             ppos = np.array(state[0:3])
-            cffirmware.state_set_position(self.state,  k, 0, pos[0], pos[1], pos[2])
-                # attPoint = [0,0,0]
-                # cffirmware.controller_lee_payload_set_attachement(self.leePayload, cfid, cfid, attPoint[0], attPoint[1], attPoint[2])
-        
+            cffirmware.state_set_position(self.state,  k, k, pos[0], pos[1], pos[2])
+            if self.payloadType == "rigid":    
+                attPoint = self.attP[k]
+                print("attP from py: ", attPoint)
+                cffirmware.controller_lee_payload_set_attachement(self.leePayload, k, k, attPoint[0], attPoint[1], attPoint[2])
+
     def controllerLeePayload(self, actions_d, states_d, state, tick, my_id, compAcc):
         self.team_ids.remove(my_id)
         self.team_ids.insert(0, my_id)
         if self.payloadType == "rigid":
-            self.attP.remove(my_id)
-            self.attP.insert(0, my_id)
+            # sort the attachment points
+            attP_res = self.attP[my_id].copy()
+            self.attP = np.delete(self.attP, my_id, 0)
+            self.attP = np.insert(self.attP, 0 , attP_res, axis=0)
+        # print(self.attP)
         self.__updateDesState(actions_d, states_d, state, compAcc)
         self.__updateState(state, my_id)
         self.__updateSensor(state,my_id)
@@ -436,7 +553,7 @@ def main():
             ref_start_idx = 7
             # add the payload angular velocity gains
             gains = [(10.0, 8, 0), (8, 4, 1.5), (0.008,0.0013, 0.0), (1000,1000,1000), (1000), (0.02,0.01)]
-        print("GAINS: ", gains)
+
         refArray = np.array(refstate)
         v = np.array(refArray[:,ref_start_idx:ref_start_idx+3])
         a = np.zeros_like(v)
@@ -449,7 +566,8 @@ def main():
         if payloadType == "point":
             robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp)
         elif payloadType == "rigid":
-            attP = [[attPx, attPy, attPz] for attPx, attPy, attPz in zip(model_path["attPx"], model_path["attPy"], model_path["attPz"])]
+            attP = [np.array([attPx, attPy, attPz]) for attPx, attPy, attPz in zip(model_path["attPx"], model_path["attPy"], model_path["attPz"])]
+            attP = np.array(attP)
             Jp   = model_path["J_p"]
             robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp, attP=attP, Jp=Jp)
 
@@ -466,7 +584,7 @@ def main():
         print('Simulating...')
         # append the initial state
         robot.appSt.append(initstate.tolist())
-        
+        print("initState :",robot.appSt[0])
         for k in range(len(refstate)-1):
             # states_d[k] = [ref for subref in reference_traj_circle(t, angular_vel, np.array(qcwc), num_robots, h=h, r=r) for ref in subref]
             u = []
@@ -476,11 +594,11 @@ def main():
                 u.append(ui)
                 robot.updateControllerDict(ctrl, r_idx)
             u = np.array(flatten_list(u))
+            # exit()
             # add some noise to the actuation
             u += np.random.normal(0.0, 0.025, len(u))
             u = np.clip(u, 0, 1.4)
             robot.step(states[k+1], states[k], u)
-            # exit()
             # time.sleep(0.1)
         print("Done Simulation")
         
