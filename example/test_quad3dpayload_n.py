@@ -627,8 +627,8 @@ def main():
         # append the initial state
         robot.appSt.append(initstate.tolist())
         print("initState :",robot.appSt[0])
-        # for k in range(len(refstate)-1):
-        for k in range(300):
+        for k in range(len(refstate)-1):
+        # for k in range(300):
             # states_d[k] = [ref for subref in reference_traj_circle(t, angular_vel, np.array(qcwc), num_robots, h=h, r=r) for ref in subref]
             u = []
             for r_idx, ctrl in robot.controller.items():
