@@ -295,7 +295,7 @@ class Controller():
         self.setpoint.position.z = states_d[2]  # m
         ap = np.zeros(3,)
         if self.payloadType == "point":
-            start_idx = 3
+            start_idx = 0
             ap = self.__computeAcc(states_d, actions_d)
         elif self.payloadType == "rigid":
             start_idx = 7
@@ -308,14 +308,14 @@ class Controller():
             self.setpoint.attitudeRate.yaw   = states_d[15]
             ap, wpdot = self.__computeFullAcc(states_d, actions_d)
         if compAcc:
-            states_d[start_idx+3 : start_idx+6] = ap  
-        self.setpoint.velocity.x = states_d[start_idx]  # m/s
-        self.setpoint.velocity.y = states_d[start_idx+1]  # m/s
-        self.setpoint.velocity.z = states_d[start_idx+2]  # m/s
+            states_d[start_idx+6 : start_idx+9] = ap  
+        self.setpoint.velocity.x = states_d[start_idx+3]  # m/s
+        self.setpoint.velocity.y = states_d[start_idx+4]  # m/s
+        self.setpoint.velocity.z = states_d[start_idx+5]  # m/s
         
-        self.setpoint.acceleration.x = states_d[start_idx+3]  # m/s^2 update this to be computed from model
-        self.setpoint.acceleration.y = states_d[start_idx+4]  # m/s^2 update this to be computed from model
-        self.setpoint.acceleration.z = states_d[start_idx+5] + 9.81  # m/s^2 update this to be computed from model
+        self.setpoint.acceleration.x = states_d[start_idx+6]  # m/s^2 update this to be computed from model
+        self.setpoint.acceleration.y = states_d[start_idx+7]  # m/s^2 update this to be computed from model
+        self.setpoint.acceleration.z = states_d[start_idx+8] + 9.81  # m/s^2 update this to be computed from model
         
         for k,i in enumerate(self.team_ids):
             action = actions_d[4*i : 4*i + 4]
@@ -434,7 +434,7 @@ class Controller():
             if self.payloadType == "rigid":
                 qc = np.array(state[13+6*i:13+6*i+3])
             ppos = np.array(state[0:3])
-            cffirmware.state_set_position(self.state,  k, k, pos[0], pos[1], pos[2])
+            cffirmware.state_set_position(self.state,  k, 0, pos[0], pos[1], pos[2])
             if self.payloadType == "rigid":    
                 attPoint = self.attP[k]
                 print("attP from py: ", attPoint)

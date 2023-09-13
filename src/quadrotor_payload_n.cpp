@@ -143,7 +143,9 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
   for (size_t i = 0; i < params.num_robots; i++) {
     // goal_weight.segment(nx_payload + 6 * params.num_robots + i * 7, 4)
     //     .setConstant(.001);
-    goal_weight.segment(nx_payload + 6 * params.num_robots + i * 7, 7)
+
+    // TODO: figure out if we need this separate case here!
+    goal_weight.segment(nx_payload + 6 * params.num_robots + i * 7, params.point_mass ?4 : 7)
         .setConstant(.001);
   }
 
