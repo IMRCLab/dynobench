@@ -478,6 +478,7 @@ def main():
             u = np.array(flatten_list(u))
             # add some noise to the actuation
             u += np.random.normal(0.0, 0.025, len(u))
+            u = np.clip(u, 0, 1.4)
             robot.step(states[k+1], states[k], u)
             # exit()
             # time.sleep(0.1)
