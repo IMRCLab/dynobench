@@ -5,7 +5,7 @@ import robot_python
 import numpy as np
 import math
 import rowan as rn
-import cvxpy as cp
+# import cvxpy as cp
 import time
 import cffirmware
 import rowan
@@ -87,7 +87,7 @@ class Controller():
         kp_limit, kd_limit, ki_limit =  gains[3]
         lambdaa = gains[4]
         self.Ji = np.diag(robotparams["Ji"]) 
-        self.cableTracking = robotparams["cableTracking"]
+        self.nocableTracking = robotparams["nocableTracking"]
         self.leePayload = cffirmware.controllerLeePayload_t()
         cffirmware.controllerLeePayloadInit(self.leePayload)
         self.team_state = dict()
@@ -103,10 +103,11 @@ class Controller():
             self.Jp = robotparams["Jp"]
             self.leePayload.en_accrb = 1  #TODO: don't forget to change this for the rigid case                               
             self.leePayload.gen_hp = 1 # TODO: don't forget to change this after updating the firmware for rigid case, I don't think we use this anymore
-        if not self.cableTracking: 
+        if self.nocableTracking: 
             self.leePayload.formation_control = 0 # 0: disable, 1:set mu_des_prev (regularization), 3: planned formations (qi refs)
         else:
             self.leePayload.formation_control = 2 # 0: disable, 1:set mu_des_prev (regularization), 3: planned formations (qi refs)
+        # exit()
         self.leePayload.lambda_svm = 1000
         self.leePayload.radius = 0.15
         self.leePayload.lambdaa = lambdaa
@@ -279,7 +280,6 @@ class Controller():
         acc = np.copy(accFull[0:3])
         wpdot = np.copy(accFull[3:6])
         acc -= np.array([0,0,9.81])
-        print(accFull)
         return acc, wpdot
     
 
@@ -300,8 +300,7 @@ class Controller():
         ap = np.zeros(3,)
         if self.payloadType == "point":
             start_idx = 0
-            if self.cableTracking:
-                print("WE SHOULDNT ENTER HERE 2")
+            if not self.nocableTracking:
                 ap = self.__computeAcc(states_d, actions_d)
         elif self.payloadType == "rigid":
             start_idx = 7
@@ -312,8 +311,8 @@ class Controller():
             self.setpoint.attitudeRate.roll  = states_d[13]
             self.setpoint.attitudeRate.pitch = states_d[14]
             self.setpoint.attitudeRate.yaw   = states_d[15]
-            if self.cableTracking:
-                print("WE SHOULDN'T ENTER HERE 3")
+            # print("",self.nocableTracking)
+            if not self.nocableTracking:
                 ap, wpdot = self.__computeFullAcc(states_d, actions_d)
         if compAcc:
             states_d[start_idx+6 : start_idx+9] = ap  
@@ -445,7 +444,6 @@ class Controller():
             cffirmware.state_set_position(self.state, k, k, pos[0], pos[1], pos[2])
             if self.payloadType == "rigid":    
                 attPoint = self.attP[k]
-                print("attP from py: ", attPoint)
                 cffirmware.controller_lee_payload_set_attachement(self.leePayload, k, k, attPoint[0], attPoint[1], attPoint[2])
             else:
                 cffirmware.controller_lee_payload_set_attachement(self.leePayload, k, k, 0, 0, 0)
@@ -458,7 +456,6 @@ class Controller():
             attP_res = self.attP[my_id].copy()
             self.attP = np.delete(self.attP, my_id, 0)
             self.attP = np.insert(self.attP, 0 , attP_res, axis=0)
-        # print(self.attP)
         self.__updateDesState(actions_d, states_d, state, compAcc)
         self.__updateState(state, my_id)
         self.__updateSensor(state,my_id)
@@ -471,7 +468,7 @@ class Controller():
 
 
 class Robot():
-    def __init__(self, robot, num_robots, payloadType, initState, gains, dt, mp, cableTracking=False, attP=None, Jp=None):
+    def __init__(self, robot, num_robots, payloadType, initState, gains, dt, mp, nocableTracking=False, attP=None, Jp=None):
         self.mp = mp
         self.mi = 0.034
         self.Ji = [16.571710e-6, 16.655602e-6, 29.261652e-6]
@@ -487,7 +484,7 @@ class Robot():
         self.l = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
         self.dt = dt
         self.controller = dict()   
-        self.params = {'mi':self.mi, 'mp': self.mp, 'Ji': self.Ji, 'num_robots': self.num_robots,'l': self.l, 'payloadType':self.payloadType, "cableTracking": cableTracking}
+        self.params = {'mi':self.mi, 'mp': self.mp, 'Ji': self.Ji, 'num_robots': self.num_robots,'l': self.l, 'payloadType':self.payloadType, "nocableTracking": nocableTracking}
         if payloadType == "rigid":
             self.Jp = Jp
             self.attP = attP
@@ -517,7 +514,7 @@ def main():
     parser.add_argument("-cff", "--enable_cffirmware", action="store_true")  # on/off flag    args = parser.args
     parser.add_argument("-w", "--write", action="store_true")  # on/off flag    args = parser.args
     parser.add_argument("-a", "--compAcc", action="store_true")  # on/off flag    args = parser.args
-    parser.add_argument("-noC", "--cableTracking", action="store_true")  # on/off flag    args = parser.args
+    parser.add_argument("-noC", "--nocableTracking", action="store_true")  # on/off flag    args = parser.args
     
     args = parser.parse_args()
     print("reference traj: ", args.inp)
@@ -526,7 +523,6 @@ def main():
         if args.model_path is not None:
             with open(args.model_path, "r") as f:
                 model_path = yaml.safe_load(f)
-        print("THE FLAG IS: ", args.cableTracking)
         # exit()
         num_robots = model_path["num_robots"]
         if model_path["point_mass"]:
@@ -576,12 +572,12 @@ def main():
         quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [], [])
         mp = model_path["m_payload"]
         if payloadType == "point":
-            robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp, cableTracking=args.cableTracking)
+            robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp, nocableTracking=args.nocableTracking)
         elif payloadType == "rigid":
             attP = [np.array([attPx, attPy, attPz]) for attPx, attPy, attPz in zip(model_path["attPx"], model_path["attPy"], model_path["attPz"])]
             attP = np.array(attP)
             Jp   = model_path["J_p"]
-            robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp,  cableTracking=args.cableTracking, attP=attP, Jp=Jp)
+            robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp,  nocableTracking=args.nocableTracking, attP=attP, Jp=Jp)
 
         if payloadType == "point":
             payloadStSize = 6            
