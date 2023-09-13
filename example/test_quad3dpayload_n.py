@@ -348,7 +348,7 @@ class Controller():
             
             tension = np.linalg.norm(ref)
             mu_planned = -tension * qc
-            cffirmware.set_setpoint_qi_ref(self.setpoint, k, 0,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2]) 
+            cffirmware.set_setpoint_qi_ref(self.setpoint, k, k,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2]) 
 
     def __getUAVSt(self, state, i):
         if self.payloadType == "point":
@@ -434,7 +434,7 @@ class Controller():
             if self.payloadType == "rigid":
                 qc = np.array(state[13+6*i:13+6*i+3])
             ppos = np.array(state[0:3])
-            cffirmware.state_set_position(self.state,  k, 0, pos[0], pos[1], pos[2])
+            cffirmware.state_set_position(self.state, k, k, pos[0], pos[1], pos[2])
             if self.payloadType == "rigid":    
                 attPoint = self.attP[k]
                 print("attP from py: ", attPoint)
