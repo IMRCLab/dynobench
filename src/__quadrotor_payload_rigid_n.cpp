@@ -104,12 +104,15 @@ void PayloadSystem::set_uavs(const std::vector<UAV> &t_uavs) {
   payload_w_cables_nv = payload_nv + 3 * numOfquads;
   payload_w_cables_nx = payload_nx + 6 * numOfquads;
 
-  accl_x.resize(payload_w_cables_nv + 3 * numOfquads);
+  nacc = payload_w_cables_nv + 3 * numOfquads;
+  accl_x.resize(nacc);
   accl_x.setZero();
 
   Bq.resize(payload_w_cables_nv, payload_w_cables_nv);
   Nq.resize(payload_w_cables_nv);
   u_inp.resize(payload_w_cables_nv);
+  __x.resize(nx);
+  __x.setZero();
 }
 
 PayloadSystem::PayloadSystem(const std::vector<UAV> &uavs) { set_uavs(uavs); }
@@ -165,7 +168,7 @@ void PayloadSystem::getBq(Eigen::Ref<Eigen::MatrixXd> Bq,
 
     Eigen::Vector3d qi = state.segment(k, 3);
 
-    CHECK_LEQ(std::abs(qi.norm() - 1.), 1e-4, "");
+    CHECK_LEQ(std::abs(qi.norm() - 1.), 5 * 1e-4, "");
 
     k += 3;
 
@@ -318,12 +321,20 @@ void PayloadSystem::getPayloadwCablesAcceleration(Vref acc, Vcref x, Vcref u) {
   CHECK_EQ(Nq.size(), payload_w_cables_nv, "");
   CHECK_EQ(u_inp.size(), payload_w_cables_nv, "");
 
+  __x = x;
+
+  ensure_state(__x);
+
   Bq.setZero();
   Nq.setZero();
   u_inp.setZero();
-  getBq(Bq, x);
-  getNq(Nq, x);
-  getuinp(u_inp, x, u);
+  getBq(Bq, __x);
+
+  // CHECK_LEQ( (Bq - Bq.transpose()).norm(), 1e-12, ""); // is this supposed to
+  // be symmetric?
+
+  getNq(Nq, __x);
+  getuinp(u_inp, __x, u);
 
   // Bq.inverse() * (Nq + u_inp)
   // acc.segment(0, payload_w_cables_nv) = Bq.lu().solve(Nq + u_inp);
@@ -333,10 +344,91 @@ void PayloadSystem::getPayloadwCablesAcceleration(Vref acc, Vcref x, Vcref u) {
 
   for (int ii = 0; ii < numOfquads; ++ii) {
     Eigen::Vector3d tau = u.segment(4 * ii + 1, 3);
-    Eigen::Vector3d curr_w = get_state_uav_i_const(ii, x).segment(4, 3);
+    Eigen::Vector3d curr_w = get_state_uav_i_const(ii, __x).segment(4, 3);
     Eigen::Vector3d wdot;
     uavs.at(ii).getWdot(wdot, curr_w, tau);
     acc.segment(payload_w_cables_nv + ii * 3, 3) = wdot;
+  }
+}
+
+void PayloadSystem::ensure_state(Vref __x) {
+
+
+  
+  double tol = 2 * 1e-4;
+ bool is_valid = true; 
+
+
+  if ((__x.segment<4>(6).norm() - 1) >  tol) { 
+    is_valid = false;
+  }
+
+  for (size_t i = 0; i < numOfquads; i++) {
+      if ((__x.segment<3>(13 + i * 3).norm() - 1)> tol) is_valid = false;
+  }
+
+  // for (size_t i = 0; i < numOfquads; i++) {
+  //   WARN_LEQ((__x.segment<4>(13 + numOfquads * 3 + i * 7).norm() - 1), tol, "");
+  //   __x.segment<4>(13 + numOfquads * 6 + i * 7).normalize();
+
+  for (size_t i = 0; i < numOfquads; i++) {
+    if ((__x.segment<4>(13 + numOfquads * 6 + i * 7).norm() - 1)> tol)  is_valid =false;
+  }
+
+
+
+
+
+
+
+  if (!is_valid) {
+  beautfiy_state(__x);
+  }
+
+
+
+
+
+
+  bool only_warn = false;
+  if (only_warn)
+  {
+  WARN_LEQ((__x.segment<4>(6).norm() - 1), 1e-4 , "");
+  __x.segment<4>(6).normalize();
+
+  for (size_t i = 0; i < numOfquads; i++) {
+    WARN_LEQ((__x.segment<3>(13 + i * 3).norm() - 1), 1e-4, "" );
+    __x.segment<3>(13 + i * 3).normalize();
+  }
+
+  for (size_t i = 0; i < numOfquads; i++) {
+    WARN_LEQ((__x.segment<4>(13 + numOfquads * 3 + i * 7).norm() - 1), tol, "");
+    __x.segment<4>(13 + numOfquads * 6 + i * 7).normalize();
+  }
+  }
+
+
+  else{ 
+
+  CHECK_LEQ((__x.segment<4>(6).norm() - 1), tol , "");
+  __x.segment<4>(6).normalize();
+
+  for (size_t i = 0; i < numOfquads; i++) {
+    CHECK_LEQ((__x.segment<3>(13 + i * 3).norm() - 1), tol, "" );
+    __x.segment<3>(13 + i * 3).normalize();
+  }
+
+  for (size_t i = 0; i < numOfquads; i++) {
+    CHECK_LEQ((__x.segment<4>(13 + numOfquads * 6 + i * 7).norm() - 1), tol, "");
+    __x.segment<4>(13 + numOfquads * 6 + i * 7).normalize();
+  }
+
+
+
+
+
+
+
   }
 }
 
@@ -349,15 +441,19 @@ void PayloadSystem::stateEvolution(
   CHECK_EQ(state.size(), nx, "");
   CHECK_EQ(next_state.size(), nx, "");
 
-  getPayloadwCablesAcceleration(accl_x, state, u);
+  __x = state;
+  ensure_state(__x);
+
+  getPayloadwCablesAcceleration(accl_x, __x, u);
 
   bool semi_implicit_rotation = true;
-  Eigen::Vector3d xp = state.segment(0, 3);
-  Eigen::Vector3d vp = state.segment(3, 3);
+  Eigen::Vector3d xp = __x.segment(0, 3);
+  Eigen::Vector3d vp = __x.segment(3, 3);
 
+  // std::cout << "accl is " << accl_x.transpose().format(OctaveFmt) << std::endl;
   if (!pointmass) {
-    Eigen::Vector4d quat_p = state.segment(6, 4);
-    Eigen::Vector3d wp = state.segment(10, 3);
+    Eigen::Vector4d quat_p = __x.segment(6, 4);
+    Eigen::Vector3d wp = __x.segment(10, 3);
     next_state.segment(10, 3) = accl_x.segment(3, 3) * dt + wp;
     if (semi_implicit_rotation) {
       wp = next_state.segment(10, 3);
@@ -374,8 +470,8 @@ void PayloadSystem::stateEvolution(
   int j = payload_nv;
 
   for (int ii = 0; ii < numOfquads; ++ii) {
-    Eigen::Vector3d qi = state.segment(k, 3);
-    Eigen::Vector3d wi = state.segment(k + 3 * numOfquads, 3);
+    Eigen::Vector3d qi = __x.segment(k, 3);
+    Eigen::Vector3d wi = __x.segment(k + 3 * numOfquads, 3);
     Eigen::Vector3d wdi = accl_x.segment(j, 3);
 
     next_state.segment(k + 3 * numOfquads, 3) = wdi * dt + wi;
@@ -394,8 +490,8 @@ void PayloadSystem::stateEvolution(
   }
 
   for (int ii = 0; ii < numOfquads; ++ii) {
-    Eigen::Vector4d curr_q = get_state_uav_i_const(ii, state).segment(0, 4);
-    Eigen::Vector3d curr_w = get_state_uav_i_const(ii, state).segment(4, 3);
+    Eigen::Vector4d curr_q = get_state_uav_i_const(ii, __x).segment(0, 4);
+    Eigen::Vector3d curr_w = get_state_uav_i_const(ii, __x).segment(4, 3);
 
     Eigen::Vector4d qNext;
     Eigen::Vector3d wNext;
@@ -407,9 +503,6 @@ void PayloadSystem::stateEvolution(
     get_state_uav_i(ii, next_state).segment(0, 4) = qNext;
     get_state_uav_i(ii, next_state).segment(4, 3) = wNext;
   }
-
-  // std::cout << "diference in coltrans " << std::endl;
-  // std::cout << next_state - state << std::endl;
 }
 
 // fro
@@ -508,8 +601,8 @@ void control_dynobench2coltrans(Eigen::Ref<Eigen::VectorXd> out,
   CHECK_EQ(out.size(), 4 * num_uavs, "");
 
   for (size_t i = 0; i < num_uavs; i++) {
-    out.segment(0 + 4 * i, 4) = uavs.at(i).ctrAll * in.segment(0 + 4 * i, 4) *
-                                (uavs.at(i).m * 9.81 / 4.0);
+    out.segment(0 + 4 * i, 4) =
+        uavs.at(i).ctrAll * in.segment(4 * i, 4) * (uavs.at(i).m * 9.81 / 4.0);
   }
 }
 

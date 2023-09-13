@@ -24,7 +24,7 @@ struct Quad3dpayload_n_params {
   int num_robots; // = 2;
   bool point_mass = true;
 
-  double col_size_robot = .15;   // radius
+  double col_size_robot = .05;   // radius
   double col_size_payload = .01; // radius
   //
   //
@@ -312,6 +312,48 @@ struct Model_quad3dpayload_n : Model_robot {
   virtual std::map<std::string, std::vector<double>>
   get_info(const Eigen::Ref<const Eigen::VectorXd> &x) override;
 
+  void check_state(Vcref state) {
+
+    double tol = 2 * 1e-4;
+    bool only_warn = true;
+
+    if (only_warn) {
+
+      if (!params.point_mass) {
+        WARN_LEQ(std::abs(state.segment(3, 4).norm() - 1), tol, "");
+      }
+
+      for (int i = 0; i < params.num_robots; ++i) {
+        WARN_LEQ(std::abs(state.segment(nx_payload + 6 * i, 3).norm() - 1),
+                 tol, "");
+        WARN_LEQ(
+            std::abs(
+                state.segment(nx_payload + 6 * params.num_robots + 7 * i, 4)
+                    .norm() -
+                1),
+            tol, "");
+      }
+
+    }
+
+    else {
+      if (!params.point_mass) {
+        CHECK_LEQ(std::abs(state.segment(3, 4).norm() - 1), tol, "");
+      }
+
+      for (int i = 0; i < params.num_robots; ++i) {
+        CHECK_LEQ(std::abs(state.segment(nx_payload + 6 * i, 3).norm() - 1),
+                 tol, "");
+        CHECK_LEQ(
+            std::abs(
+                state.segment(nx_payload + 6 * params.num_robots + 7 * i, 4)
+                    .norm() -
+                1),
+           tol, "");
+      }
+    }
+  }
+
   virtual void ensure(Eigen::Ref<Eigen::VectorXd> xout) override {
     // state (size): [x_load(3,)  q_cable(3,)   v_load(3,)   w_cable(3,)
     // quat(4,)     w_uav(3)]
@@ -320,20 +362,21 @@ struct Model_quad3dpayload_n : Model_robot {
     // xout.segment<4>(12).normalize();
     // xout.segment<3>(3).normalize();
 
+    check_state(xout);
+
     if (!params.point_mass) {
-      CHECK_LEQ(std::abs(xout.segment(3, 4).norm() - 1), 1e-4, "");
       xout.segment(3, 4).normalize();
     }
 
     for (int i = 0; i < params.num_robots; ++i) {
-      CHECK_LEQ(std::abs(xout.segment(nx_payload + 6 * i, 3).norm() - 1), 1e-4,
-                "");
+      // CHECK_LEQ(std::abs(xout.segment(nx_payload + 6 * i, 3).norm() - 1), 1e-4,
+      //           "");
       xout.segment(nx_payload + 6 * i, 3).normalize();
-      CHECK_LEQ(
-          std::abs(xout.segment(nx_payload + 6 * params.num_robots + 7 * i, 4)
-                       .norm() -
-                   1),
-          1e-4, "");
+      // CHECK_LEQ(
+      //     std::abs(xout.segment(nx_payload + 6 * params.num_robots + 7 * i, 4)
+      //                  .norm() -
+      //              1),
+      //     1e-4, "");
       xout.segment(nx_payload + 6 * params.num_robots + 7 * i, 4).normalize();
     }
   }

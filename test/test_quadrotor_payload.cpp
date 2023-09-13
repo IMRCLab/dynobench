@@ -447,9 +447,10 @@ BOOST_AUTO_TEST_CASE(test_rigid_body3) {
 
   Eigen::VectorXd xnext(model->nx);
   Eigen::VectorXd u(model->nu);
-  
+
   u.setZero();
-  u.segment(0, 4).setConstant(1.2);
+  u.setConstant(1.1);
+  // u.segment(0, 4).setConstant(1.2);
 
   Trajectory traj;
 
@@ -457,9 +458,71 @@ BOOST_AUTO_TEST_CASE(test_rigid_body3) {
   for (size_t i = 0; i < 100; i++) {
     model->step(xnext, x, u, model->ref_dt);
     traj.states.push_back(xnext);
-    std::cout << "dif " << (x-xnext).transpose() << std::endl;
+
+    {
+      Eigen::VectorXd state_coltrans(model->nx);
+      state_dynobench2coltrans(state_coltrans, xnext, 3);
+      model->payload_system.beautfiy_state(state_coltrans);
+
+    }
+    std::cout << "dif " << (x - xnext).transpose() << std::endl;
     traj.actions.push_back(u);
     x = xnext;
   }
   traj.to_yaml_format("/tmp/traj_rollout.yaml");
 }
+
+BOOST_AUTO_TEST_CASE(test_rigid_body4) {
+
+  // continue here!!
+
+  dynobench::Quad3dpayload_n_params params;
+  params.read_from_yaml(base_path "models/rigid_3.yaml");
+
+  auto model = mk<dynobench::Model_quad3dpayload_n>(params);
+
+  // Problem problem(base_path "envs/quad3d_payload/empty0_3_rig_hover.yaml");
+  Problem problem(base_path
+                  "envs/quad3d_payload/empty0_3_rig_hover_debug.yaml");
+
+  Eigen::VectorXd x = problem.start;
+
+  Eigen::VectorXd xnext(model->nx);
+  Eigen::VectorXd u(model->nu);
+
+  u.setZero();
+  // u.segment(0, 4).setConstant(1.2);
+
+  u.setOnes();
+
+  // u
+  // << 1.10526,1.10397,1.10572,1.10703,1.06102,1.05072,1.04213,1.05236,1.03691,1.03523,1.04218,1.04358;
+
+  Trajectory traj;
+
+  traj.states.push_back(x);
+  for (size_t i = 0; i < 100; i++) {
+    model->step(xnext, x, u, model->ref_dt);
+    traj.states.push_back(xnext);
+    std::cout << "dif " << (x - xnext).transpose() << std::endl;
+    traj.actions.push_back(u);
+    x = xnext;
+  }
+  traj.to_yaml_format("/tmp/traj_rollout.yaml");
+}
+
+BOOST_AUTO_TEST_CASE(test_c2) {
+
+  Problem problem(base_path "envs/quad3d_payload/empty0_3_rig_hover.yaml");
+
+  dynobench::Quad3dpayload_n_params params;
+  params.read_from_yaml(base_path "models/rigid_3.yaml");
+  auto model = mk<dynobench::Model_quad3dpayload_n>(params);
+
+  CollisionOut out;
+  model->collision_distance(problem.start, out);
+
+  out.write(std::cout);
+}
+
+

@@ -85,6 +85,16 @@
     throw std::runtime_error(msg);                                             \
   }
 
+#define WARN_LEQ(A, B, msg)                                                    \
+  if (!(A <= B)) {                                                             \
+    std::cout << "WARN CHECK_LEQ failed: '" << #A << "'=" << A << " '" << #B        \
+              << "'=" << B << " -- " << msg << std::endl                       \
+              << "AT: " << AT << std::endl;                                    \
+    std::cerr << "WARN CHECK_LEQ failed: '" << #A << "'=" << A << " '" << #B        \
+              << "'=" << B << " -- " << msg << std::endl                       \
+              << "AT: " << AT << std::endl;                                    \
+  }
+
 #define CHECK_GE(A, B, msg)                                                    \
   if (!(A > B)) {                                                              \
     std::cout << "CHECK_GE failed: '" << #A << "'=" << A << " '" << #B         \

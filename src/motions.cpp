@@ -251,7 +251,8 @@ void Problem::read_from_yaml(const YAML::Node &env) {
 
   robotType = env["robots"][0]["type"].as<std::string>();
 
-  if (startsWith(robotType, "quad3d") && !startsWith(robotType, "quad3dpayload")) {
+  if (startsWith(robotType, "quad3d") &&
+      !startsWith(robotType, "quad3dpayload")) {
     start.segment<4>(3).normalize();
     goal.segment<4>(3).normalize();
   }
@@ -382,8 +383,17 @@ double check_trajectory(const std::vector<Vxd> &xs_out,
       CSTR_V(xnext);
       CSTR_V(xs_out.at(i + 1));
 
-      if (jump > max_jump_distance)
+      if (jump > max_jump_distance) {
+        // std::cout
+
+        for (size_t j = 0; j < xnext.size(); j++) {
+          std::cout << "i : " << j << " " << xnext(j) - xs_out.at(i + 1)(j)
+                    << " " << xnext(j) << " " << xs_out.at(i + 1)(j)
+                    << std::endl;
+        }
+
         max_jump_distance = jump;
+      }
     }
   }
 

@@ -237,7 +237,7 @@ class Visualizer():
                 Path(__file__).parent / 'cf2_assembly.stl'), g.MeshLambertMaterial(color=DnametoColor.get(color_name, 0xffffff)))
             self.vis[prefix + "cable_" + name].set_object(g.Box([0.005,0.005,self.quads[name].l]), g.MeshLambertMaterial(color=0x000000))            
             self.vis[prefix + name + "_sphere"].set_object(
-                g.Mesh(g.Sphere(0.1), g.MeshLambertMaterial(opacity=0.1)))  # safety distance
+                g.Mesh(g.Sphere(0.05), g.MeshLambertMaterial(opacity=0.1)))  # safety distance
 
     def _setObstacles(self, obstacles):
         for idx, obstacle in enumerate(obstacles):
@@ -443,21 +443,22 @@ def quad3dpayload_meshcatViewer():
     print("starting the visualizer, start and goal")
     visualizer = Visualizer(quadsPayload, env)
 
-    
     # point1 = [-0.473381,0.0529316,0.186414]
     # point2 = [-0.487709,0.0579852,0.186402]
     # point1 =  [1.14314,0.118284,0.451639]
     # point2=  [1.03288,0.118285,0.451639]
 
-    # points = np.array([point1, point2]).T
+    point1 =  [-0.159152,-0.0469328,0.487074]
+    point2 =  [-0.164079,0.0532498,0.485482]
 
-    # visualizer.vis["col1"].set_object(
-    #     g.Line(g.PointsGeometry(points), g.LineBasicMaterial()))
+    points = np.array([point1, point2]).T
+
+
+    visualizer.vis["col1"].set_object(
+        g.Line(g.PointsGeometry(points), g.LineBasicMaterial()))
 
     # name = input("press any key on terminal to close: ")
     # print("closing")
-
-
 
     if args.interactive:
         # plt.show()

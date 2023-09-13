@@ -75,6 +75,7 @@ public:
   Eigen::MatrixXd Bq;
   Eigen::VectorXd Nq;
   Eigen::VectorXd u_inp;
+  Eigen::VectorXd __x;
 
   void write(std::ostream &out) {
 
@@ -97,6 +98,8 @@ public:
   }
 
   PayloadSystem(const std::vector<UAV> &uavs);
+
+  void ensure_state(Vref __x);
 
   void set_uavs(const std::vector<UAV> &uavs);
 
@@ -148,6 +151,8 @@ public:
 
   void beautfiy_state(Eigen::Ref<Eigen::VectorXd> state) {
 
+    std::cout << "full state" << std::endl;
+    std::cout << state.transpose() << std::endl;
     std::cout << "payload pos " << std::endl;
     std::cout << state.segment<3>(0).transpose() << std::endl;
     std::cout << "payload vel " << std::endl;
@@ -164,7 +169,8 @@ public:
 
     std::cout << "w cables" << std::endl;
     for (size_t i = 0; i < numOfquads; i++) {
-      std::cout << state.segment<3>(13 + i * 3).transpose() << std::endl;
+      std::cout << state.segment<3>(13 + 3 * numOfquads + i * 3).transpose()
+                << std::endl;
     }
 
     std::cout << "robot i " << std::endl;
@@ -173,7 +179,7 @@ public:
       std::cout << state.segment<4>(13 + numOfquads * 6 + i * 7).transpose()
                 << std::endl;
       std::cout << "w " << std::endl;
-      std::cout << state.segment<4>(13 + numOfquads * 6 + i * 7 + 4).transpose()
+      std::cout << state.segment<3>(13 + numOfquads * 6 + i * 7 + 4).transpose()
                 << std::endl;
     }
   }

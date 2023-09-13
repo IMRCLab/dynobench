@@ -141,9 +141,8 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
   nx_payload = params.point_mass ? 6 : 13;
 
   for (size_t i = 0; i < params.num_robots; i++) {
-    // goal_weight.segment(nx_payload + 6 * params.num_robots + i * 7, 4)
-    //     .setConstant(.001);
-    goal_weight.segment(nx_payload + 6 * params.num_robots + i * 7, 7)
+    goal_weight.segment(nx_payload + 6 * i, 3).setConstant(.1);
+    goal_weight.segment(nx_payload + 6 * params.num_robots + i * 7, 3)
         .setConstant(.001);
   }
 
@@ -257,11 +256,10 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
     collision_geometries.emplace_back(std::make_shared<fcl::Capsuled>(
         params.col_size_payload, rate_colision_cables * params.l_payload(i)));
   }
-  double col_size_robot = .05;
 
   for (size_t i = 0; i < params.num_robots; i++) {
     collision_geometries.emplace_back(
-        std::make_shared<fcl::Sphered>(col_size_robot));
+        std::make_shared<fcl::Sphered>(params.col_size_robot));
   }
 
   ts_data.resize(2 * params.num_robots + 1);
@@ -293,21 +291,33 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
 
   state_weights = Vxd::Zero(nx);
   state_ref = Vxd::Zero(nx);
+  state_weights.setConstant(0.01); // REMOVE!!
 
-  for (size_t i = 0; i < params.num_robots; ++i) {
-    state_weights.segment(nx_payload + 6 * i, 3).setConstant(0.1);
-    state_ref(nx_payload + 6 * i + 2) = -.9;
+  if (!params.point_mass) {
+    state_weights.segment(3, 4).setConstant(0.1);
+    state_ref(6) = 1; // @QUIM TODO: I only want the z axis looking upwards, not
+    state_weights.segment(7, 6).setConstant(0.1);
   }
 
+  // the full orientation
 
-  k_acc = 1; // TODO: change this!!
+  //
+  //
+  // state_weights.segment(0, 3).setConstant(100);
+  for (size_t i = 0; i < params.num_robots; ++i) {
+    state_weights.segment(nx_payload + 6 * i, 3).setConstant(0.1);
+    state_ref(nx_payload + 6 * i + 2) = -.85;
+  }
+
+  for (size_t i = 0; i < params.num_robots; ++i) {
+    state_ref(nx_payload + 6 * params.num_robots + i * 7 + 3) = 1;
+  }
+
+  k_acc = 0.1;
 
   if (!params.point_mass) {
     std::vector<UAV> uavs(params.num_robots);
     // TODO: pass the parameters?
-
-
-
 
     for (size_t i = 0; i < params.num_robots; ++i) {
       uavs.at(i).pos_fr_payload =
@@ -333,12 +343,21 @@ Eigen::VectorXd Model_quad3dpayload_n::get_x0(const Eigen::VectorXd &x) {
   CHECK_EQ(static_cast<size_t>(x.size()), nx, AT);
   Eigen::VectorXd out(nx);
   out.setZero();
-  out.head(6) = x.head(6);
+
+  if (params.point_mass) {
+    out.head(6) = x.head(6);
+  }
+
+  else {
+    out.head(7) = x.head(7);
+  }
+
   size_t c_idx = nx_payload;
   for (size_t i = 0; i < params.num_robots; ++i) {
-    out(c_idx + 6 * i + 3 - 1) = -1;
-    out(c_idx + 6 * params.num_robots + 7 * i + 4 - 1) = 1;
+    out(c_idx + 6 * i + 2) = -1;
+    out(c_idx + 6 * params.num_robots + 7 * i + 3) = 1;
   }
+
   return out;
 }
 
@@ -620,14 +639,17 @@ void Model_quad3dpayload_n::step(Eigen::Ref<Eigen::VectorXd> xnext,
 
     // convert format of dynobench to format of coltrans
 
+    check_state(x);
     // Convert the u's
     state_dynobench2coltrans(x_coltrans, x, payload_system.numOfquads);
 
     control_dynobench2coltrans(u_coltrans, u, payload_system.uavs);
 
-    // ctrl input is [ f, taux , tauz , tauz ]
+    // ctrl input iet [ f, taux , tauz , tauz ]
     payload_system.stateEvolution(xnext_coltrans, x_coltrans, u_coltrans, dt);
     state_coltrans2dynobench(xnext, xnext_coltrans, payload_system.numOfquads);
+
+    check_state(xnext);
 
   } else {
     NOT_IMPLEMENTED;
