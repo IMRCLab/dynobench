@@ -325,11 +325,14 @@ class Controller():
         self.setpoint.acceleration.x = states_d[start_idx+6]  # m/s^2 update this to be computed from model
         self.setpoint.acceleration.y = states_d[start_idx+7]  # m/s^2 update this to be computed from model
         self.setpoint.acceleration.z = states_d[start_idx+8] + 9.81  # m/s^2 update this to be computed from model
-        print("setpoint payload pos",self.setpoint.position.x, self.setpoint.position.y, self.setpoint.position.z)
-        print("setpoint payload vel",self.setpoint.velocity.x, self.setpoint.velocity.y, self.setpoint.velocity.z)
-        print("setpoint payload acc",self.setpoint.acceleration.x, self.setpoint.acceleration.y, self.setpoint.acceleration.z)
-        print("setpoint payload quat",self.setpoint.attitudeQuaternion.x, self.setpoint.attitudeQuaternion.y, self.setpoint.attitudeQuaternion.z, self.setpoint.attitudeQuaternion.w)
-        print("setpoint payload w",self.setpoint.attitudeRate.roll, self.setpoint.attitudeRate.pitch, self.setpoint.attitudeRate.yaw)
+
+        # dbg messages
+        if self.payloadType == "rigid":
+            print("setpoint payload pos",self.setpoint.position.x, self.setpoint.position.y, self.setpoint.position.z)
+            print("setpoint payload vel",self.setpoint.velocity.x, self.setpoint.velocity.y, self.setpoint.velocity.z)
+            print("setpoint payload acc",self.setpoint.acceleration.x, self.setpoint.acceleration.y, self.setpoint.acceleration.z)
+            print("setpoint payload quat",self.setpoint.attitudeQuaternion.x, self.setpoint.attitudeQuaternion.y, self.setpoint.attitudeQuaternion.z, self.setpoint.attitudeQuaternion.w)
+            print("setpoint payload w",self.setpoint.attitudeRate.roll, self.setpoint.attitudeRate.pitch, self.setpoint.attitudeRate.yaw)
 
         for k,i in enumerate(self.team_ids):
             action = actions_d[4*i : 4*i + 4]
@@ -442,14 +445,17 @@ class Controller():
         self.state.attitudeQuaternion.y = quat[1]
         self.state.attitudeQuaternion.z = quat[2]
         self.state.attitudeQuaternion.w = quat[3]
-        print("UAV: ", i)
-        print("attpoint: ",self.attP[i])
-        print("state uav pos",self.state.position.x, self.state.position.y, self.state.position.z)
-        print("state uav vel",self.state.velocity.x, self.state.velocity.y, self.state.velocity.z)
-        print("state payload pos",self.state.payload_pos.x, self.state.payload_pos.y, self.state.payload_pos.z)
-        print("state payload vel",self.state.payload_vel.x, self.state.payload_vel.y, self.state.payload_vel.z)
-        print("state payload quat",self.state.attitudeQuaternion.x, self.state.attitudeQuaternion.y, self.state.attitudeQuaternion.z, self.state.attitudeQuaternion.w)
-        print("state payload w",self.state.payload_omega.x, self.state.payload_omega.y, self.state.payload_omega.z)
+        
+        # Dbg messages....
+        if self.payloadType == "rigid":
+            print("UAV: ", i)
+            print("attpoint: ",self.attP[i])
+            print("state uav pos",self.state.position.x, self.state.position.y, self.state.position.z)
+            print("state uav vel",self.state.velocity.x, self.state.velocity.y, self.state.velocity.z)
+            print("state payload pos",self.state.payload_pos.x, self.state.payload_pos.y, self.state.payload_pos.z)
+            print("state payload vel",self.state.payload_vel.x, self.state.payload_vel.y, self.state.payload_vel.z)
+            print("state payload quat",self.state.attitudeQuaternion.x, self.state.attitudeQuaternion.y, self.state.attitudeQuaternion.z, self.state.attitudeQuaternion.w)
+            print("state payload w",self.state.payload_omega.x, self.state.payload_omega.y, self.state.payload_omega.z)
 
 
     def __updateNeighbors(self, state):
@@ -470,7 +476,10 @@ class Controller():
         #     attP_res = self.attP[my_id].copy()
         #     self.attP = np.delete(self.attP, my_id, 0)
         #     self.attP = np.insert(self.attP, 0 , attP_res, axis=0)
-        print("attP in main: \n", self.attP)
+
+        # dbg messages
+        if self.payloadType == "rigid":
+            print("attP in main: \n", self.attP)
         self.__updateDesState(actions_d, states_d, state, compAcc)
         self.__updateState(state, my_id)
         self.__updateSensor(state,my_id)
@@ -479,7 +488,10 @@ class Controller():
         control = np.array([self.leePayload.thrustSI, self.control.torque[0], self.control.torque[1], self.control.torque[2]])
         # print(control)
         u = self.B0_inv@control
-        print("u:", u, my_id)
+
+        # dbg messages
+        if self.payloadType == "rigid":
+            print("u:", u, my_id)
         # u = np.clip(u, 0., 1.4)
         return u.tolist()
 
