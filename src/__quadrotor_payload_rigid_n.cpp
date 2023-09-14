@@ -3,6 +3,7 @@
 #include <numeric>
 
 #include "dynobench/__quadrotor_payload_rigid.hpp"
+#include <Eigen/Eigenvalues>
 
 namespace dynobench {
 
@@ -180,8 +181,8 @@ void PayloadSystem::getBq(Eigen::Ref<Eigen::MatrixXd> Bq,
       Eigen::Matrix3d R_p = to_matrix_formatC(
           state.segment(6, 4)); // Assuming to_matrix() is defined elsewhere
       Eigen::Vector3d posFrload(uavs.at(ii).pos_fr_payload);
-      // std::cout << "posFrload.format(OctaveFmt)" << std::endl;
-      // std::cout << posFrload.format(OctaveFmt) << std::endl;
+      std::cout << "posFrload.format(OctaveFmt)" << std::endl;
+      std::cout << posFrload.format(OctaveFmt) << std::endl;
 
       Eigen::Matrix3d qiqiT = qi * qi.transpose();
 
@@ -248,6 +249,8 @@ void PayloadSystem::getNq(Eigen::Ref<Eigen::VectorXd> Nq,
     }
   }
 
+  std::cout << "Nq.format(OctaveFmt)" << std::endl;
+  std::cout << Nq.transpose().format(OctaveFmt) << std::endl;
   if (!pointmass) {
     // Assuming J is a member variable representing inertia tnsor
     Nq.segment(3, 3) -= skew(wl) * J * wl;
@@ -298,6 +301,8 @@ void PayloadSystem::getuinp(
     Eigen::Matrix3d qiqiT = qi * qi.transpose();
 
     u_inp.segment(0, 3) += u_i;
+    std::cout << "u_inp" << std::endl;
+    std::cout << u_inp.transpose().format(OctaveFmt) << std::endl;
 
     // Eigen::Vector3d u_perp = (Eigen::Matrix3d::Identity() - qiqiT) * u_i;
     u_inp.segment(j, 3) = -skew(qi) * u_i;
@@ -339,6 +344,33 @@ void PayloadSystem::getPayloadwCablesAcceleration(Vref acc, Vcref x, Vcref u) {
   // Bq.inverse() * (Nq + u_inp)
   // acc.segment(0, payload_w_cables_nv) = Bq.lu().solve(Nq + u_inp);
   acc.segment(0, payload_w_cables_nv) = Bq.inverse() * (Nq + u_inp);
+
+  beautfiy_state(__x);
+  std::cout << "u " << std::endl;
+  std::cout << u.transpose().format(OctaveFmt) << std::endl;
+
+  std::cout << "(Nq + u_inp).transpose().format(OctaveFmt)" << std::endl;
+  std::cout << (Nq + u_inp).transpose().format(OctaveFmt) << std::endl;
+
+  std::cout << "(Nq).transpose().format(OctaveFmt)" << std::endl;
+  std::cout << Nq.transpose().format(OctaveFmt) << std::endl;
+  std::cout << "(u_inp).transpose().format(OctaveFmt)" << std::endl;
+  std::cout << u_inp.transpose().format(OctaveFmt) << std::endl;
+
+  std::cout << "Bq.eigenvalues().transpose().format(OctaveFmt)" << std::endl;
+  std::cout << Bq.eigenvalues().transpose().format(OctaveFmt) << std::endl;
+
+  std::cout << "Bq.format(OctaveFmt)" << std::endl;
+  std::cout << Bq.format(OctaveFmt) << std::endl;
+
+  std::cout << "Bq.inverse().format(OctaveFmt)" << std::endl;
+  std::cout << Bq.inverse().format(OctaveFmt) << std::endl;
+
+  std::cout << "acc.segment(0, payload_w_cables_nv).format(OctaveFmt)"
+            << std::endl;
+  std::cout << acc.segment(0, payload_w_cables_nv).format(OctaveFmt)
+            << std::endl;
+  std::cout << (Nq + u_inp).transpose().format(OctaveFmt) << std::endl;
   acc.segment(0, 3) -= Eigen::Vector3d(
       0, 0, 9.81); // TODO: ask Khaled -- are you sure this is correct?
 
@@ -353,82 +385,64 @@ void PayloadSystem::getPayloadwCablesAcceleration(Vref acc, Vcref x, Vcref u) {
 
 void PayloadSystem::ensure_state(Vref __x) {
 
-
-  
   double tol = 2 * 1e-4;
- bool is_valid = true; 
+  bool is_valid = true;
 
-
-  if ((__x.segment<4>(6).norm() - 1) >  tol) { 
+  if ((__x.segment<4>(6).norm() - 1) > tol) {
     is_valid = false;
   }
 
   for (size_t i = 0; i < numOfquads; i++) {
-      if ((__x.segment<3>(13 + i * 3).norm() - 1)> tol) is_valid = false;
+    if ((__x.segment<3>(13 + i * 3).norm() - 1) > tol)
+      is_valid = false;
   }
 
   // for (size_t i = 0; i < numOfquads; i++) {
-  //   WARN_LEQ((__x.segment<4>(13 + numOfquads * 3 + i * 7).norm() - 1), tol, "");
+  //   WARN_LEQ((__x.segment<4>(13 + numOfquads * 3 + i * 7).norm() - 1), tol,
+  //   "");
   //   __x.segment<4>(13 + numOfquads * 6 + i * 7).normalize();
 
   for (size_t i = 0; i < numOfquads; i++) {
-    if ((__x.segment<4>(13 + numOfquads * 6 + i * 7).norm() - 1)> tol)  is_valid =false;
+    if ((__x.segment<4>(13 + numOfquads * 6 + i * 7).norm() - 1) > tol)
+      is_valid = false;
   }
-
-
-
-
-
-
 
   if (!is_valid) {
-  beautfiy_state(__x);
+    beautfiy_state(__x);
   }
-
-
-
-
-
 
   bool only_warn = false;
-  if (only_warn)
-  {
-  WARN_LEQ((__x.segment<4>(6).norm() - 1), 1e-4 , "");
-  __x.segment<4>(6).normalize();
+  if (only_warn) {
+    WARN_LEQ((__x.segment<4>(6).norm() - 1), 1e-4, "");
+    __x.segment<4>(6).normalize();
 
-  for (size_t i = 0; i < numOfquads; i++) {
-    WARN_LEQ((__x.segment<3>(13 + i * 3).norm() - 1), 1e-4, "" );
-    __x.segment<3>(13 + i * 3).normalize();
+    for (size_t i = 0; i < numOfquads; i++) {
+      WARN_LEQ((__x.segment<3>(13 + i * 3).norm() - 1), 1e-4, "");
+      __x.segment<3>(13 + i * 3).normalize();
+    }
+
+    for (size_t i = 0; i < numOfquads; i++) {
+      WARN_LEQ((__x.segment<4>(13 + numOfquads * 3 + i * 7).norm() - 1), tol,
+               "");
+      __x.segment<4>(13 + numOfquads * 6 + i * 7).normalize();
+    }
   }
 
-  for (size_t i = 0; i < numOfquads; i++) {
-    WARN_LEQ((__x.segment<4>(13 + numOfquads * 3 + i * 7).norm() - 1), tol, "");
-    __x.segment<4>(13 + numOfquads * 6 + i * 7).normalize();
-  }
-  }
+  else {
 
+    CHECK_LEQ((__x.segment<4>(6).norm() - 1), tol, "");
+    __x.segment<4>(6).normalize();
 
-  else{ 
+    for (size_t i = 0; i < numOfquads; i++) {
+      CHECK_LEQ((__x.segment<3>(13 + i * 3).norm() - 1), tol, "");
+      __x.segment<3>(13 + i * 3).normalize();
+    }
 
-  CHECK_LEQ((__x.segment<4>(6).norm() - 1), tol , "");
-  __x.segment<4>(6).normalize();
-
-  for (size_t i = 0; i < numOfquads; i++) {
-    CHECK_LEQ((__x.segment<3>(13 + i * 3).norm() - 1), tol, "" );
-    __x.segment<3>(13 + i * 3).normalize();
-  }
-
-  for (size_t i = 0; i < numOfquads; i++) {
-    CHECK_LEQ((__x.segment<4>(13 + numOfquads * 6 + i * 7).norm() - 1), tol, "");
-    __x.segment<4>(13 + numOfquads * 6 + i * 7).normalize();
-  }
-
-
-
-
-
-
-
+    for (size_t i = 0; i < numOfquads; i++) {
+      CHECK_LEQ((__x.segment<4>(13 + numOfquads * 6 + i * 7).norm() - 1), tol,
+                "");
+      __x.segment<4>(13 + numOfquads * 6 + i * 7).normalize();
+    }
   }
 }
 
@@ -450,7 +464,8 @@ void PayloadSystem::stateEvolution(
   Eigen::Vector3d xp = __x.segment(0, 3);
   Eigen::Vector3d vp = __x.segment(3, 3);
 
-  // std::cout << "accl is " << accl_x.transpose().format(OctaveFmt) << std::endl;
+  // std::cout << "accl is " << accl_x.transpose().format(OctaveFmt) <<
+  // std::endl;
   if (!pointmass) {
     Eigen::Vector4d quat_p = __x.segment(6, 4);
     Eigen::Vector3d wp = __x.segment(10, 3);
