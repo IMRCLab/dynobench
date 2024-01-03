@@ -238,7 +238,8 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
   u_weight.setConstant(.5);
 
   // DO we need weight on the state? @KHALED??
-  // x_weightb = 50. * Vxd::Ones(19);
+  x_weightb = 100*Vxd::Ones(nx);
+  x_weightb(2) = 200;
   // x_weightb.head(7) = Eigen::VectorXd::Zero(7);
 
   // COLLISIONS
@@ -256,6 +257,7 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
     collision_geometries.emplace_back(std::make_shared<fcl::Capsuled>(
         params.col_size_payload, rate_colision_cables * params.l_payload(i)));
   }
+ 
 
   for (size_t i = 0; i < params.num_robots; i++) {
     collision_geometries.emplace_back(
@@ -581,7 +583,7 @@ void Model_quad3dpayload_n::calcDiffV(
     apply_fun(calcJ_n6_p);
   }
 
-  else if (params.point_mass) {
+  else if (!params.point_mass) {
 
     double tol = 1e-7;
 

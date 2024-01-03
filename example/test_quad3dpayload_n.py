@@ -67,6 +67,7 @@ class Controller():
         self.mi = robotparams['mi']
         self.mp = robotparams['mp']
         self.payloadType = robotparams["payloadType"]
+        self.mu_planned = []
         # start_idx: to change the updateState according to the type of payload
         self.t2t = 0.006
         arm_length = 0.046
@@ -109,7 +110,7 @@ class Controller():
             self.leePayload.formation_control = 2 # 0: disable, 1:set mu_des_prev (regularization), 3: planned formations (qi refs)
         # exit()
         self.leePayload.lambda_svm = 1000
-        self.leePayload.radius = 0.15
+        self.leePayload.radius = 0.1
         self.leePayload.lambdaa = lambdaa
         self.leePayload.Kpos_P.x = kpos_p
         self.leePayload.Kpos_P.y = kpos_p
@@ -324,7 +325,7 @@ class Controller():
         
         self.setpoint.acceleration.x = states_d[start_idx+6]  # m/s^2 update this to be computed from model
         self.setpoint.acceleration.y = states_d[start_idx+7]  # m/s^2 update this to be computed from model
-        self.setpoint.acceleration.z = states_d[start_idx+8] + 9.81  # m/s^2 update this to be computed from model
+        self.setpoint.acceleration.z = states_d[start_idx+8]  # m/s^2 update this to be computed from model
 
         # dbg messages
         if self.payloadType == "rigid":
@@ -333,7 +334,8 @@ class Controller():
             print("setpoint payload acc",self.setpoint.acceleration.x, self.setpoint.acceleration.y, self.setpoint.acceleration.z)
             print("setpoint payload quat",self.setpoint.attitudeQuaternion.x, self.setpoint.attitudeQuaternion.y, self.setpoint.attitudeQuaternion.z, self.setpoint.attitudeQuaternion.w)
             print("setpoint payload w",self.setpoint.attitudeRate.roll, self.setpoint.attitudeRate.pitch, self.setpoint.attitudeRate.yaw)
-
+        mu_planned_tmp = []
+        self.mu_planned = []
         for k,i in enumerate(self.team_ids):
             action = actions_d[4*i : 4*i + 4]
             control = self.B0@action
@@ -365,7 +367,9 @@ class Controller():
             
             tension = np.linalg.norm(ref)
             mu_planned = -tension * qc
+            mu_planned_tmp.extend(mu_planned.tolist())
             cffirmware.set_setpoint_qi_ref(self.setpoint, k, k,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2]) 
+        self.mu_planned.append(mu_planned_tmp)
 
     def __getUAVSt(self, state, i):
         if self.payloadType == "point":
@@ -492,7 +496,7 @@ class Controller():
         # dbg messages
         if self.payloadType == "rigid":
             print("u:", u, my_id)
-        # u = np.clip(u, 0., 1.4)
+        u = np.clip(u, 0., 1.5)
         return u.tolist()
 
 
@@ -509,6 +513,7 @@ class Robot():
         self.appU = []
         self.lambdaa = 50
         self.num_robots = num_robots
+        self.mu_planned = []
         # TODO: this is a hack; should be read from the config file; supports up to 8 robots
         self.l = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
         self.dt = dt
@@ -521,11 +526,13 @@ class Robot():
         self.__initController(gains)
    
     def step(self, xnext, x, u):
+        self.mu_planned.extend(self.controller[str(0)].mu_planned)
         self.robot.step(xnext, x, u, self.dt)
         self.state = xnext
         self.u = u
         self.appSt.append(self.state.tolist())
         self.appU.append(self.u.tolist())
+        # self.controller[str(0)].mu_planned = []
 
     def updateControllerDict(self, controller, i):
         self.controller[str(i)] = controller
@@ -585,12 +592,12 @@ def main():
         initstate = np.array(refstate[0])
         if payloadType == "point":
             ref_start_idx = 3
-            gains = [(10, 8, 0), (8, 6, 1.5), (0.008,0.0013, 0.0), (1000,1000,1000), (1000)]
+            gains = [(15, 10, 1.5), (20, 15, 6), (0.008,0.0013, 0.0), (1000,1000,1000), (10000)]
+            # gains = [(10, 8, 2.5), (10, 6, 3.5), (0.008,0.0013, 0.0), (1000,1000,1000), (10000)]
         elif payloadType == "rigid":
             ref_start_idx = 7
             # add the payload angular velocity gains 
-
-            gains = [(10, 8, 0.0), (8, 3, 0.0), (0.008,0.0013, 0.0), (1000,1000,1000), (1000), (0.0002,0.0001)]
+            gains = [(10, 8, 2.0), (8, 3, 2.5), (0.008,0.0013, 0.0), (1000,1000,1000), (1000), (0.0002,0.0001)]
 
         refArray = np.array(refstate)
         # refArray = np.vstack((refArray,refArray))
@@ -613,7 +620,12 @@ def main():
         refArray = np.insert(refArray, ref_start_idx+4,  a[:,1], axis=1)
         refArray = np.insert(refArray, ref_start_idx+5,  a[:,2], axis=1)
 
+        # quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [-0.8, -0.8,  0.0], [ 2.5,  2.5,  1.0])
         quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [], [])
+        # don't forget to set the env limits (hard coded)
+        # quadpayload.set_position_lb([-0.8, -0.8,  0.0])
+        # quadpayload.set_position_ub([ 2.5,  2.5,  1.0])
+
         mp = model_path["m_payload"]
         if payloadType == "point":
             robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp, nocableTracking=args.nocableTracking)
@@ -651,12 +663,16 @@ def main():
             u = np.array(flatten_list(u))
             # exit()
             # add some noise to the actuation
-            # u += np.random.normal(0.0, 0.025, len(u))
-            # u = np.clip(u, 0, 1.4)
+            u += np.random.normal(0.0, 0.025, len(u))
+            u = np.clip(u, 0, 1.5)
             # exit()
             robot.step(states[k+1], states[k],u)
             # time.sleep(1)
         print("Done Simulation")
+        robot.mu_planned.append(robot.mu_planned[-1])
+        print(len(robot.appU))
+        print(len(robot.appSt))
+        print(len(robot.mu_planned))
         
         output = {}
         output["feasible"] = 0
@@ -664,8 +680,9 @@ def main():
         output["result"] = {}
         output["result"]["states"] = robot.appSt
         output["result"]["actions"] = robot.appU
-        print(len(robot.appU))
-        print(len(robot.appSt))
+        output["result"]["mu_planned"] = robot.mu_planned
+        print(type(robot.mu_planned))
+        print(type(robot.mu_planned[0]))
         if args.write:
             print('Writing')
             with open(args.out, 'w') as file:
