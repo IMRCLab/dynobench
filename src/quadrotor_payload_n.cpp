@@ -293,28 +293,28 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
 
   state_weights = Vxd::Zero(nx);
   state_ref = Vxd::Zero(nx);
-  state_weights.setConstant(0.01); // REMOVE!!
+  // state_weights.setConstant(0.01); // REMOVE!!
 
-  if (!params.point_mass) {
-    state_weights.segment(3, 4).setConstant(0.1);
-    state_ref(6) = 1; // @QUIM TODO: I only want the z axis looking upwards, not
-    state_weights.segment(7, 6).setConstant(0.1);
-  }
+  // if (!params.point_mass) {
+  //   state_weights.segment(3, 4).setConstant(0.1);
+  //   state_ref(6) = 1; // @QUIM TODO: I only want the z axis looking upwards, not
+  //   state_weights.segment(7, 6).setConstant(0.1);
+  
 
-  // the full orientation
+  //   // the full orientation
 
-  //
-  //
-  // state_weights.segment(0, 3).setConstant(100);
-  for (size_t i = 0; i < params.num_robots; ++i) {
-    state_weights.segment(nx_payload + 6 * i, 3).setConstant(0.1);
-    state_ref(nx_payload + 6 * i + 2) = -.85;
-  }
+  //   //
+  //   //
+  //   // state_weights.segment(0, 3).setConstant(100);
+  //   for (size_t i = 0; i < params.num_robots; ++i) {
+  //     state_weights.segment(nx_payload + 6 * i, 3).setConstant(0.1);
+  //     state_ref(nx_payload + 6 * i + 2) = -.85;
+  //   }
 
-  for (size_t i = 0; i < params.num_robots; ++i) {
-    state_ref(nx_payload + 6 * params.num_robots + i * 7 + 3) = 1;
-  }
-
+  //   for (size_t i = 0; i < params.num_robots; ++i) {
+  //     state_ref(nx_payload + 6 * params.num_robots + i * 7 + 3) = 1;
+  //   }
+  // }
   k_acc = 0.1;
 
   if (!params.point_mass) {
