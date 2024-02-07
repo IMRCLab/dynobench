@@ -1,6 +1,6 @@
 environment:
-  min: [-0.8, -0.8,  0.0]
-  max: [ 2.5,  2.5,  1.0]
+  min: [-1000, -1000,  0.0]
+  max: [ 1000,  1000,  1.0]
   obstacles: []
 name: quad3d_payload_empty_0
 robots:
