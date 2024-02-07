@@ -110,7 +110,7 @@ class Controller():
             self.leePayload.formation_control = 2 # 0: disable, 1:set mu_des_prev (regularization), 3: planned formations (qi refs)
         # exit()
         self.leePayload.lambda_svm = 1000
-        self.leePayload.radius = 0.1
+        self.leePayload.radius = 0.15
         self.leePayload.lambdaa = lambdaa
         self.leePayload.Kpos_P.x = kpos_p
         self.leePayload.Kpos_P.y = kpos_p
@@ -496,7 +496,7 @@ class Controller():
         # dbg messages
         if self.payloadType == "rigid":
             print("u:", u, my_id)
-        u = np.clip(u, 0., 1.5)
+        # u = np.clip(u, 0., 1.5)
         return u.tolist()
 
 
@@ -621,10 +621,14 @@ def main():
         refArray = np.insert(refArray, ref_start_idx+5,  a[:,2], axis=1)
 
         # quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [-0.8, -0.8,  0.0], [ 2.5,  2.5,  1.0])
-        quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [], [])
+        # quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [], [])
+        quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [-1000, -1000, 0.0], [1000, 1000, 1.0])
         # don't forget to set the env limits (hard coded)
         # quadpayload.set_position_lb([-0.8, -0.8,  0.0])
         # quadpayload.set_position_ub([ 2.5,  2.5,  1.0])
+
+        quadpayload.set_position_lb([-1000, -1000,  0.0])
+        quadpayload.set_position_ub([ 1000,  1000,  1.0])
 
         mp = model_path["m_payload"]
         if payloadType == "point":

@@ -22,7 +22,7 @@ struct Quad3dpayload_n_params {
   int num_robots;// = 2;
   bool point_mass = true;
 
-  double col_size_robot = .1;    // radius
+  double col_size_robot = .15;    // radius
   double col_size_payload = .01; // radius
   //
   //
@@ -42,7 +42,7 @@ struct Quad3dpayload_n_params {
   Eigen::VectorXd J_vx; 
   Eigen::VectorXd J_vy; 
   Eigen::VectorXd J_vz; 
-  double m_payload = 0.0054; // kg
+  double m_payload = 0.01; // kg
 
   double g = 9.81;
   double max_f = 1.4;        // thrust to weight ratio -- Khaled DONE
