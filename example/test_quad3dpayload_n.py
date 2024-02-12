@@ -503,7 +503,7 @@ class Controller():
 class Robot():
     def __init__(self, robot, num_robots, payloadType, initState, gains, dt, mp, nocableTracking=False, attP=None, Jp=None):
         self.mp = mp
-        self.mi = 0.034
+        self.mi = 0.0356
         self.Ji = [16.571710e-6, 16.655602e-6, 29.261652e-6]
         self.payloadType = payloadType
         self.robot = robot
