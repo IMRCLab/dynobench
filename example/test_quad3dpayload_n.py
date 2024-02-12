@@ -598,8 +598,7 @@ def main():
             ref_start_idx = 7
             # add the payload angular velocity gains 
             gains = [(10, 8, 2.0), (8, 3, 2.5), (0.008,0.0013, 0.0), (1000,1000,1000), (1000), (0.0002,0.0001)]
-
-        refArray = np.array(refstate)
+        refArray = np.asarray(refstate,  dtype=float)
         # refArray = np.vstack((refArray,refArray))
         # print(refArray.shape)
         # for hovering uncomment this 
@@ -627,7 +626,7 @@ def main():
         # quadpayload.set_position_lb([-0.8, -0.8,  0.0])
         # quadpayload.set_position_ub([ 2.5,  2.5,  1.0])
 
-        quadpayload.set_position_lb([-1000, -1000,  0.0])
+        quadpayload.set_position_lb([-1000, -1000,  -1.0])
         quadpayload.set_position_ub([ 1000,  1000,  1.0])
 
         mp = model_path["m_payload"]
@@ -648,6 +647,7 @@ def main():
         # states =np.vstack((states, states))
         states[0] = initstate
         states_d = refArray  
+        # print(states_d,"\n", type(states_d[0][0]))
         actions_d = np.array(refactions)  
         # actions_d = np.vstack((actions_d, actions_d))
 
@@ -674,9 +674,6 @@ def main():
             # time.sleep(1)
         print("Done Simulation")
         robot.mu_planned.append(robot.mu_planned[-1])
-        print(len(robot.appU))
-        print(len(robot.appSt))
-        print(len(robot.mu_planned))
         
         output = {}
         output["feasible"] = 0
@@ -685,8 +682,6 @@ def main():
         output["result"]["states"] = robot.appSt
         output["result"]["actions"] = robot.appU
         output["result"]["mu_planned"] = robot.mu_planned
-        print(type(robot.mu_planned))
-        print(type(robot.mu_planned[0]))
         if args.write:
             print('Writing')
             with open(args.out, 'w') as file:
