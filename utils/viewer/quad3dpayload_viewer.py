@@ -406,7 +406,7 @@ def quad3dpayload_meshcatViewer():
         elif "result" in path:
             states = path['result']['states']
             actions = path['result']['actions']
-            print("shape of actions: ", np.array(actions).shape)
+            # print("shape of actions: ", np.array(actions).shape)
         else: 
             raise NotImplementedError("unknown result format")
         
@@ -426,7 +426,7 @@ def quad3dpayload_meshcatViewer():
             visualizer.draw_traces(np.array(states_d), quadNum, pType, lengths, desired)
         desired = False
         visualizer.draw_traces(np.array(states), quadNum, pType, lengths, desired)
-        print("shape of states: ", np.array(states).shape)
+        # print("shape of states: ", np.array(states).shape)
 
         anim = Animation()
         for k, state in enumerate(states):

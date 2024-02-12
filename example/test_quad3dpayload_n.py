@@ -553,7 +553,6 @@ def main():
     parser.add_argument("-noC", "--nocableTracking", action="store_true")  # on/off flag    args = parser.args
     
     args = parser.parse_args()
-    print("reference traj: ", args.inp)
     if args.enable_cffirmware:    
         
         if args.model_path is not None:
@@ -644,12 +643,9 @@ def main():
             payloadStSize = 13            
 
         states = np.zeros((len(refstate), payloadStSize+6*num_robots+7*num_robots))
-        # states =np.vstack((states, states))
         states[0] = initstate
         states_d = refArray  
-        # print(states_d,"\n", type(states_d[0][0]))
         actions_d = np.array(refactions)  
-        # actions_d = np.vstack((actions_d, actions_d))
 
         print('Simulating...')
         # append the initial state
