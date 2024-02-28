@@ -67,6 +67,7 @@ class Controller():
         self.mi = robotparams['mi']
         self.mp = robotparams['mp']
         self.payloadType = robotparams["payloadType"]
+        self.robot_radius = robotparams["robot_radius"]
         self.mu_planned = []
         # start_idx: to change the updateState according to the type of payload
         self.t2t = 0.006
@@ -110,7 +111,7 @@ class Controller():
             self.leePayload.formation_control = 2 # 0: disable, 1:set mu_des_prev (regularization), 3: planned formations (qi refs)
         # exit()
         self.leePayload.lambda_svm = 1000
-        self.leePayload.radius = 0.15
+        self.leePayload.radius = self.robot_radius
         self.leePayload.lambdaa = lambdaa
         self.leePayload.Kpos_P.x = kpos_p
         self.leePayload.Kpos_P.y = kpos_p
@@ -501,7 +502,7 @@ class Controller():
 
 
 class Robot():
-    def __init__(self, robot, num_robots, payloadType, initState, gains, dt, mp, nocableTracking=False, attP=None, Jp=None):
+    def __init__(self, robot, num_robots, payloadType, initState, gains, dt, mp, robot_radius, nocableTracking=False, attP=None, Jp=None):
         self.mp = mp
         self.mi = 0.0356
         self.Ji = [16.571710e-6, 16.655602e-6, 29.261652e-6]
@@ -513,12 +514,13 @@ class Robot():
         self.appU = []
         self.lambdaa = 50
         self.num_robots = num_robots
+        self.robot_radius = robot_radius
         self.mu_planned = []
         # TODO: this is a hack; should be read from the config file; supports up to 8 robots
         self.l = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
         self.dt = dt
         self.controller = dict()   
-        self.params = {'mi':self.mi, 'mp': self.mp, 'Ji': self.Ji, 'num_robots': self.num_robots,'l': self.l, 'payloadType':self.payloadType, "nocableTracking": nocableTracking}
+        self.params = {'mi':self.mi, 'mp': self.mp, 'Ji': self.Ji, 'num_robots': self.num_robots,'l': self.l, 'payloadType':self.payloadType, "nocableTracking": nocableTracking, "robot_radius": robot_radius}
         if payloadType == "rigid":
             self.Jp = Jp
             self.attP = attP
@@ -611,16 +613,19 @@ def main():
 
 
 
-
         v = np.array(refArray[:,ref_start_idx:ref_start_idx+3])
         a = np.zeros_like(v)
         refArray = np.insert(refArray, ref_start_idx+3,  a[:,0], axis=1)
         refArray = np.insert(refArray, ref_start_idx+4,  a[:,1], axis=1)
         refArray = np.insert(refArray, ref_start_idx+5,  a[:,2], axis=1)
 
+        with open(args.model_path, "r") as f:
+            model_params = yaml.load(f,Loader=yaml.CSafeLoader)
+        robot_radius = model_params["col_size_robot"]   
         # quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [-0.8, -0.8,  0.0], [ 2.5,  2.5,  1.0])
         # quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [], [])
-        quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [-1000, -1000, 0.0], [1000, 1000, 1.0])
+        # quadpayload = robot_python.robot_factory(str(Path(__file__).parent / "../models/{}_{}.yaml".format(payloadType,num_robots)), [-1000, -1000, 0.0], [1000, 1000, 1.0])
+        quadpayload = robot_python.robot_factory(args.model_path, [-1000, -1000, 0.0], [1000, 1000, 1.0])
         # don't forget to set the env limits (hard coded)
         # quadpayload.set_position_lb([-0.8, -0.8,  0.0])
         # quadpayload.set_position_ub([ 2.5,  2.5,  1.0])
@@ -630,12 +635,12 @@ def main():
 
         mp = model_path["m_payload"]
         if payloadType == "point":
-            robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp, nocableTracking=args.nocableTracking)
+            robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp, robot_radius, nocableTracking=args.nocableTracking)
         elif payloadType == "rigid":
             attP = [np.array([attPx, attPy, attPz]) for attPx, attPy, attPz in zip(model_path["attPx"], model_path["attPy"], model_path["attPz"])]
             attP = np.array(attP)
             Jp   = model_path["J_p"]
-            robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp,  nocableTracking=args.nocableTracking, attP=attP, Jp=Jp)
+            robot = Robot(quadpayload, num_robots, payloadType, initstate, gains, dt, mp,robot_radius,  nocableTracking=args.nocableTracking, attP=attP, Jp=Jp)
 
         if payloadType == "point":
             payloadStSize = 6            
