@@ -232,7 +232,7 @@ Model_quad3dpayload_n::Model_quad3dpayload_n(
   u_weight.setConstant(.5);
 
   // DO we need weight on the state? @KHALED??
-  x_weightb = 200*Vxd::Ones(nx);
+  x_weightb = 50*Vxd::Ones(nx);
   // x_weightb(2) = 00;
   // x_weightb.head(7) = Eigen::VectorXd::Zero(7);
 
