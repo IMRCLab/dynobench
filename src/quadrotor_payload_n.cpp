@@ -1,4 +1,5 @@
 #include "dynobench/quadrotor_payload_n.hpp"
+#include "quadrotor_payload_dynamics_autogen_n1_p.hpp" // @KHALED TODO (e.g. n=1, point mass)
 #include "quadrotor_payload_dynamics_autogen_n2_p.hpp" // @KHALED TODO (e.g. n=2, point mass)
 #include "quadrotor_payload_dynamics_autogen_n3_b.hpp" // @KHALED TODO (e.g. n=3, rigid body)
 #include "quadrotor_payload_dynamics_autogen_n3_p.hpp" // @KHALED TODO (e.g. n=2, point mass)
@@ -459,7 +460,7 @@ void Model_quad3dpayload_n::calcV(Eigen::Ref<Eigen::VectorXd> ff,
   };
 
   if (params.num_robots == 1 && params.point_mass) {
-    NOT_IMPLEMENTED;
+    apply_fun(calcV_n1_p);
 
   } else if (params.num_robots == 2 && params.point_mass) {
 
@@ -514,7 +515,7 @@ void Model_quad3dpayload_n::calcDiffV(
 
   if (params.num_robots == 1 && params.point_mass) {
 
-    NOT_IMPLEMENTED;
+    apply_fun(calcJ_n1_p);
   } else if (params.num_robots == 2 && params.point_mass) {
 
     apply_fun(calcJ_n2_p);
@@ -567,7 +568,7 @@ void Model_quad3dpayload_n::step(Eigen::Ref<Eigen::VectorXd> xnext,
   };
 
   if (params.num_robots == 1 && params.point_mass) {
-    NOT_IMPLEMENTED;
+    apply_fun(calcStep_n1_p);
 
   } else if (params.num_robots == 2 && params.point_mass) {
     apply_fun(calcStep_n2_p);
@@ -625,7 +626,7 @@ void Model_quad3dpayload_n::stepDiff(Eigen::Ref<Eigen::MatrixXd> Fx,
   Fu.setZero();
 
   if (params.num_robots == 1 && params.point_mass) {
-    NOT_IMPLEMENTED;
+    apply_fun(calcF_n1_p);
 
   } else if (params.num_robots == 2 && params.point_mass) {
     apply_fun(calcF_n2_p);

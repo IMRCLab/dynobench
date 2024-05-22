@@ -1,0 +1,17 @@
+environment:
+  max: [1000, 1000, 1.0]
+  min: [-1000, -1000, -0.1]
+  obstacles:
+  - center: [0.5, 0.4, 0.0]
+    size: [0.4, 0.4, 3.0]
+    type: box
+  - center: [0.5, -0.4, 0.0]
+    size: [0.4, 0.4, 3.0]
+    type: box
+name: quad3d_payload_empty_0
+robots:
+- goal: [3.5, 0.0, 0.0, 0, 0, 0, 0.0, 0.0, -1.0, 0, 0, 0,  0, 0, 0, 1, 0, 0, 0]
+  l: [0.5]
+  quadsNum: 1
+  start: [-0.5, 0.0, 0.0, 0, 0, 0, 0.0, 0.0, -1.0, 0, 0, 0,  0, 0, 0, 1, 0, 0, 0]
+  type: point_1
