@@ -37,7 +37,8 @@ add_library(
   ./src/integrator2_2d.cpp
   ./src/quadrotor_payload.cpp
   ./src/quadrotor_payload_n.cpp
-  ./src/quadrotor_payload_n.cpp
+  ./src/DintegratorCables_dynamics.cpp
+  ./src/DintegratorCables.cpp
   ./src/quadrotor_payload_dynamics_autogen_n1_p.cpp
   ./src/quadrotor_payload_dynamics_autogen_n2_p.cpp
   ./src/quadrotor_payload_dynamics_autogen_n3_p.cpp
