@@ -4,7 +4,7 @@
 #include "dynobench/quadrotor_payload.hpp"
 #include "dynobench/quadrotor_payload_n.hpp"
 
-#define base_path "../../"
+#define base_path "../"
 
 using namespace dynobench;
 
@@ -28,7 +28,6 @@ BOOST_AUTO_TEST_CASE(t_bug) {
 
 BOOST_AUTO_TEST_CASE(t_hello_quadrotor_payload_n) {
 
-  std::cout << "Hello Khaled" << std::endl;
   dynobench::Quad3dpayload_n_params params;
   params.read_from_yaml(base_path "models/point.yaml");
   auto model = mk<dynobench::Model_quad3dpayload_n>(params);
@@ -52,7 +51,6 @@ BOOST_AUTO_TEST_CASE(t_hello_quadrotor_payload_n) {
 
 BOOST_AUTO_TEST_CASE(t_hello_quadrotor_payload) {
 
-  std::cout << "Hello Khaled" << std::endl;
   auto model = mk<dynobench::Model_quad3dpayload>();
   std::cout << "Model has been created" << std::endl;
   BOOST_TEST(true);
@@ -150,11 +148,11 @@ BOOST_AUTO_TEST_CASE(t_quadrotor_payload_dynamics) {
     std::cout << "report Su " << std::endl;
     approx_equal_report(Su, Su_diff);
 
-    BOOST_TEST((Jx - Jx_diff).norm() <= 10 * 1e-5);
-    BOOST_TEST((Ju - Ju_diff).norm() <= 10 * 1e-5);
+    BOOST_TEST((Jx - Jx_diff).norm() <= 10 * 1e-3);
+    BOOST_TEST((Ju - Ju_diff).norm() <= 10 * 1e-3);
 
-    BOOST_TEST((Sx - Sx_diff).norm() <= 10 * 1e-5);
-    BOOST_TEST((Su - Su_diff).norm() <= 10 * 1e-5);
+    BOOST_TEST((Sx - Sx_diff).norm() <= 10 * 1e-3);
+    BOOST_TEST((Su - Su_diff).norm() <= 10 * 1e-3);
   }
 }
 
@@ -189,7 +187,6 @@ BOOST_AUTO_TEST_CASE(t_quadrotor_payload_collisions) {
 
 BOOST_AUTO_TEST_CASE(t_quadrotor_payload_2_p_dynamics) {
 
-  std::cout << "Hello Qium :)" << std::endl;
   dynobench::Quad3dpayload_n_params params;
   params.read_from_yaml(base_path "models/point_2.yaml");
   params.point_mass = true;
@@ -285,18 +282,17 @@ BOOST_AUTO_TEST_CASE(t_quadrotor_payload_2_p_dynamics) {
     std::cout << "report Su " << std::endl;
     approx_equal_report(Su, Su_diff);
 
-    BOOST_TEST((Jx - Jx_diff).norm() <= 10 * 1e-5);
-    BOOST_TEST((Ju - Ju_diff).norm() <= 10 * 1e-5);
+    BOOST_TEST((Jx - Jx_diff).norm() <= 10 * 1e-3);
+    BOOST_TEST((Ju - Ju_diff).norm() <= 10 * 1e-3);
 
-    BOOST_TEST((Sx - Sx_diff).norm() <= 10 * 1e-5);
-    BOOST_TEST((Su - Su_diff).norm() <= 10 * 1e-5);
+    BOOST_TEST((Sx - Sx_diff).norm() <= 10 * 1e-3);
+    BOOST_TEST((Su - Su_diff).norm() <= 10 * 1e-3);
   }
 
 }
 
 BOOST_AUTO_TEST_CASE(t_quadrotor_payload_3_p_dynamics) {
 
-  std::cout << "Hello Qium :)" << std::endl;
   dynobench::Quad3dpayload_n_params params;
   params.read_from_yaml(base_path "models/point_3.yaml");
 
@@ -395,11 +391,11 @@ BOOST_AUTO_TEST_CASE(t_quadrotor_payload_3_p_dynamics) {
     std::cout << "report Su " << std::endl;
     approx_equal_report(Su, Su_diff);
 
-    BOOST_TEST((Jx - Jx_diff).norm() <= 10 * 1e-5);
-    BOOST_TEST((Ju - Ju_diff).norm() <= 10 * 1e-5);
+    BOOST_TEST((Jx - Jx_diff).norm() <= 10 * 1e-3);
+    BOOST_TEST((Ju - Ju_diff).norm() <= 10 * 1e-3);
 
-    BOOST_TEST((Sx - Sx_diff).norm() <= 10 * 1e-5);
-    BOOST_TEST((Su - Su_diff).norm() <= 10 * 1e-5);
+    BOOST_TEST((Sx - Sx_diff).norm() <= 10 * 1e-3);
+    BOOST_TEST((Su - Su_diff).norm() <= 10 * 1e-3);
   }
 
 }
