@@ -74,6 +74,8 @@ std::unique_ptr<Model_robot> robot_factory(const char *file,
   } else if (dynamics == "quad3dpayload_point") {
     return std::make_unique<Model_quad3dpayload_n>(file, p_lb, p_ub);
   }
+    else if (dynamics == "quad3dpayload_n") {
+    return std::make_unique<Model_quad3dpayload_n>(file, p_lb, p_ub);
   else if (dynamics == "DintegratorCables") {
     return std::make_unique<DintegratorCables>(file, p_lb, p_ub);
   }

@@ -60,7 +60,7 @@ DintegratorCables::DintegratorCables(const DintegratorCables_params &params,
   invariance_reuse_col_shape = false;
   nx_col = 8; 
   nx_pr = 2;
-  is_2d = false;
+  is_2d = true;
 
   ref_dt = params.dt;
   distance_weights = params.distance_weights;

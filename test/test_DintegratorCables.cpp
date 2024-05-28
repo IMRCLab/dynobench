@@ -10,7 +10,6 @@ using namespace dynobench;
 
 BOOST_AUTO_TEST_CASE(t_DintegratorCables) {
 
-  std::cout << "Hello Khaled" << std::endl;
   dynobench::DintegratorCables_params params;
   params.read_from_yaml(base_path "models/DintegratorCables.yaml");
   auto model = mk<dynobench::DintegratorCables>(params);
@@ -19,7 +18,6 @@ BOOST_AUTO_TEST_CASE(t_DintegratorCables) {
 
 BOOST_AUTO_TEST_CASE(t_DintegratorCables_dynamics) { 
 
-  std::cout << "Hello: \n" << std::endl;
   dynobench::DintegratorCables_params params;
   params.read_from_yaml(base_path "models/DintegratorCables.yaml");
   auto model = mk<dynobench::DintegratorCables>(params);
