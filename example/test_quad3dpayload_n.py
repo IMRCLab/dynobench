@@ -247,11 +247,9 @@ class Controller():
             start_idx = 0
             rig_idx = 0
         if compAcc:
-            print("I AM HERE")
             ap = self.__computeAcc(states_d, actions_d, tick)
             
         states_d[start_idx+6: start_idx+9] = ap
-        print(states_d[start_idx+6: start_idx+9])
         self.setpoint.velocity.x = states_d[start_idx+3]  # m/s
         self.setpoint.velocity.y = states_d[start_idx+4]  # m/s
         self.setpoint.velocity.z = states_d[start_idx+5]  # m/s
@@ -291,9 +289,12 @@ class Controller():
             mu_planned_tmp.extend(mu_planned.tolist())
             mu_planned_sum += mu_planned
             wcdot = self.__comuteAngAcc(states_d, actions_d, ap, i)                
-            cffirmware.set_setpoint_qi_ref(self.setpoint, k, k,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2], wcdot[0],wcdot[1],wcdot[2]) 
-            # cffirmware.set_setpoint_qi_ref(self.setpoint, k, k,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2], 0, 0, 0) 
-        print("mu_planned_sum: ", mu_planned_sum)
+            if self.reftype == "opt":
+                cffirmware.set_setpoint_qi_ref(self.setpoint, k, k,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2], wcdot[0],wcdot[1],wcdot[2]) 
+            elif self.reftype == "geom":
+                cffirmware.set_setpoint_qi_ref(self.setpoint, k, k,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2], 0, 0, 0) 
+            else: 
+                print("wrong type!")
         self.mu_planned.append(mu_planned_tmp)
 
     def __getUAVSt(self, state, i):
@@ -378,9 +379,6 @@ class Controller():
 
         u = self.B0_inv@control
         return u.tolist()
-        print("Fref: ", self.F_ref)
-        print("F_d: ", self.leePayload.F_d)
-
 
 class Robot():
     def __init__(self, robot, num_robots, payloadType, initState, gains, dt, mi, mp, robot_radius, reftype, nocableTracking=False, attP=None, Jp=None):
@@ -504,7 +502,7 @@ def main():
             a_ref = np.zeros(v.shape)
             gains = [
                 (6, 7.5, 0),
-                (20, 25, 0),
+                (20, 15, 0),
                 (0.007, 0.001, 0.0),
                 (1000, 1000, 1000),
                 (100),
