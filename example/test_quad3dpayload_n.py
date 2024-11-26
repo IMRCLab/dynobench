@@ -278,6 +278,11 @@ class Controller():
             qc = states_d[start_idx+9+6*i: start_idx+9+6*i+3]
             wc = states_d[start_idx+9+6*i+3: start_idx++9+6*i+6]
             qi_mat[0:3, k] = -qc
+            action = actions_d[4*i : 4*i + 4]
+            control = self.B0@action
+            self.leePayload.tau_ff.x = control[1]
+            self.leePayload.tau_ff.y = control[2]
+            self.leePayload.tau_ff.z = control[3]
             # second_term +=  self.mi*self.l[i]*wc.dot(wc)*qc
         second_term += self.F_ref
         T_vec = np.linalg.pinv(qi_mat)@second_term
@@ -505,7 +510,7 @@ def main():
                 (18, 12, 0),
                 (0.01, 0.001, 0.0),
                 (10, 10, 10),
-                (100),
+                (1000),
             ]
             reftype = "geom"
         else:
@@ -514,7 +519,7 @@ def main():
                 (12, 10, 0),
                 (0.01, 0.001, 0.0),
                 (10, 10, 10),
-                (100),
+                (1000),
             ]
             a_ref = derivative(v, dt)
         # if args.compAcc:
@@ -558,11 +563,10 @@ def main():
 
                 u.append(ui)
                 robot.updateControllerDict(ctrl, r_idx)
-                print()
             u = np.array(flatten_list(u))
             # add some noise to the actuation
-            # u += np.random.normal(0.0, 0.025, len(u))
-            # u = np.clip(u, 0, 1.5)
+            u += np.random.normal(0.0, 0.025, len(u))
+            u = np.clip(u, 0, 1.5)
             robot.step(states[k + 1], states[k], u, actions_d[k], rollout=rollout)
         print("Done Simulation")
         if len(robot.mu_planned) > 0:
