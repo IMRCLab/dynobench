@@ -15,7 +15,7 @@ import argparse
 from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-
+import cvxpy as cp
 
 np.set_printoptions(linewidth=np.inf)
 np.set_printoptions(suppress=True)
@@ -52,10 +52,11 @@ def flatten(w_tilde):
 
 def derivative(vec, dt):
     dvec  =[]
-    dvec  =[[0,0,0]]
+    # dvec  =[[0,0,0]]
     for i in range(len(vec)-1):
         dvectmp = (vec[i+1]-vec[i])/dt
         dvec.append(dvectmp.tolist())
+    dvec.append([0,0,0])
     return np.asarray(dvec)
 
 
@@ -276,30 +277,54 @@ class Controller():
         second_term = np.zeros(3,) 
         for k,i in enumerate(self.team_ids):
             qc = states_d[start_idx+9+6*i: start_idx+9+6*i+3]
-            wc = states_d[start_idx+9+6*i+3: start_idx++9+6*i+6]
+            wc = states_d[start_idx+9+6*i+3: start_idx+9+6*i+6]
             qi_mat[0:3, k] = -qc
             action = actions_d[4*i : 4*i + 4]
             control = self.B0@action
-            self.leePayload.tau_ff.x = control[1]
-            self.leePayload.tau_ff.y = control[2]
-            self.leePayload.tau_ff.z = control[3]
+            self.leePayload.tau_ff.x = 0.0
+            self.leePayload.tau_ff.y = 0.0
+            self.leePayload.tau_ff.z = 0.0
             # second_term +=  self.mi*self.l[i]*wc.dot(wc)*qc
         second_term += self.F_ref
-        T_vec = np.linalg.pinv(qi_mat)@second_term
+        # Construct the problem.
+        n = self.num_robots
+        T_vec = cp.Variable(n)
+        objective = cp.Minimize(0.001*cp.sum_squares(T_vec) + cp.sum_squares((qi_mat@T_vec - self.F_ref)))
+        constraints = [ np.zeros(n,) <= T_vec]
+        prob = cp.Problem(objective, constraints)
+
+        # The optimal objective value is returned by `prob.solve()`.
+        result = prob.solve()
+        # print(qi_mat)
+        # print(self.F_ref)
+        print("T_vec: ",T_vec.value)
+
+        T_vec2 = cp.Variable(n)
+        objective = cp.Minimize(cp.sum_squares(T_vec2))
+        constraints = [T_vec2[0]*qi_mat[0:3,0] + T_vec2[1]*qi_mat[0:3,1] + T_vec2[2]*qi_mat[0:3,2] == self.F_ref]
+        prob = cp.Problem(objective, constraints)
+        result = prob.solve()
+        print("T_vec2: ",T_vec2.value)
+        T_vec = T_vec.value
+        # print(qi_mat)
+        # print(self.F_ref)
+        # print("T_vec: ",T_vec.value)
+
         for k,i in enumerate(self.team_ids):
             qc = states_d[start_idx+9+6*i: start_idx+9+6*i+3]
-            wc = states_d[start_idx+9+6*i+3: start_idx++9+6*i+6]
+            wc = states_d[start_idx+9+6*i+3: start_idx+9+6*i+6]
             qc_dot = np.cross(wc, qc)
+            action = actions_d[4*k : 4*k + 4]
+            control = self.B0@action
+            self.leePayload.tau_ff.x = 0.0
+            self.leePayload.tau_ff.y = 0.0
+            self.leePayload.tau_ff.z = 0.0
             mu_planned = -T_vec[k]*qc
             mu_planned_tmp.extend(mu_planned.tolist())
             mu_planned_sum += mu_planned
             wcdot = self.__comuteAngAcc(states_d, actions_d, ap, i)                
-            if self.reftype == "opt":
-                cffirmware.set_setpoint_qi_ref(self.setpoint, k, k,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2], wcdot[0],wcdot[1],wcdot[2]) 
-            elif self.reftype == "geom":
-                cffirmware.set_setpoint_qi_ref(self.setpoint, k, k,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2], 0, 0, 0) 
-            else: 
-                print("wrong type!")
+            cffirmware.set_setpoint_qi_ref(self.setpoint, k, k,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2], wcdot[0],wcdot[1],wcdot[2]) 
+            # cffirmware.set_setpoint_qi_ref(self.setpoint, k, k,  mu_planned[0], mu_planned[1], mu_planned[2], qc_dot[0], qc_dot[1], qc_dot[2], 0, 0, 0) 
         self.mu_planned.append(mu_planned_tmp)
 
     def __getUAVSt(self, state, i):
@@ -565,7 +590,7 @@ def main():
                 robot.updateControllerDict(ctrl, r_idx)
             u = np.array(flatten_list(u))
             # add some noise to the actuation
-            u += np.random.normal(0.0, 0.025, len(u))
+            # u += np.random.normal(0.0, 0.025, len(u))
             u = np.clip(u, 0, 1.5)
             robot.step(states[k + 1], states[k], u, actions_d[k], rollout=rollout)
         print("Done Simulation")
@@ -582,6 +607,7 @@ def main():
         output["result"]["actions"] = robot.appU
         output["result"]["actions_d"] = actions_d.tolist()
         output["result"]["mu_planned"] = robot.mu_planned
+        output["result"]["acceleration"] = a_ref.tolist()
         if args.write:
             print("Writing")
             with open(args.out, "w") as file:
